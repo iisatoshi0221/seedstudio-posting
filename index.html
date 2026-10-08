@@ -23,6 +23,90 @@
           <div class="brand-header__tagline">歩いて届ける、未来のたね。</div>
         </div>
 
+      <section
+  id="authCard"
+  class="card"
+  style="padding:14px 16px; margin-bottom:16px;"
+>
+
+  <div id="authLoading">
+    <strong>ログイン状態を確認しています...</strong>
+  </div>
+
+
+  <div
+    id="authSignedOut"
+    class="is-hidden"
+  >
+
+    <strong>
+      SeedStudio 職員ログイン
+    </strong>
+
+    <small
+      style="
+        display:block;
+        margin-top:5px;
+        color:#6E746F;
+      "
+    >
+      配布実績を共有するため、
+      Googleアカウントでログインしてください。
+    </small>
+
+    <button
+      id="googleLoginButton"
+      class="button button--primary"
+      type="button"
+    >
+      Googleでログイン
+    </button>
+
+  </div>
+
+
+  <div
+    id="authSignedIn"
+    class="is-hidden"
+  >
+
+    <strong id="authUserName">
+      ログイン中
+    </strong>
+
+    <small
+      id="authUserEmail"
+      style="
+        display:block;
+        margin-top:4px;
+        color:#6E746F;
+      "
+    ></small>
+
+
+    <div
+      id="authPermissionStatus"
+      style="
+        margin-top:8px;
+        font-size:13px;
+        font-weight:700;
+      "
+    ></div>
+
+
+    <button
+      id="googleLogoutButton"
+      class="button button--secondary"
+      type="button"
+    >
+      ログアウト
+    </button>
+
+  </div>
+
+</section>
+        
+
         <div class="home-menu">
           <button class="home-menu-card home-menu-card--primary" data-nav="register-basic" type="button">
             <span class="home-menu-card__icon">＋</span>
