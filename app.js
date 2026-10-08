@@ -19,30 +19,33 @@
 
   // ============================================================
   // Temporary master data
-  // Later: move to Firestore master collections
+  //
+  // Phase 1:
+  // Postingで実際に担当職員として選択する職員だけを表示。
+  //
+  // S0001 は既存データとの互換性維持のため
+  // 大久保 和恵さんのIDをそのまま使用。
+  //
+  // S0006〜S0008 は今回追加。
   // ============================================================
 
   const master = {
     staff: [
       {
+        id: "S0006",
+        name: "田島 雄弥"
+      },
+      {
+        id: "S0007",
+        name: "山本 耕平"
+      },
+      {
+        id: "S0008",
+        name: "井伊 啓"
+      },
+      {
         id: "S0001",
         name: "大久保 和恵"
-      },
-      {
-        id: "S0002",
-        name: "宮 麻衣子"
-      },
-      {
-        id: "S0003",
-        name: "鈴木 由香"
-      },
-      {
-        id: "S0004",
-        name: "小野 瑞季"
-      },
-      {
-        id: "S0005",
-        name: "番場 みづい"
       }
     ],
 
@@ -67,6 +70,26 @@
         name: "SeedStudio 事業所案内 2026-10"
       }
     ]
+  };
+
+
+  // ============================================================
+  // Legacy staff labels
+  //
+  // 新規登録画面には表示しないが、
+  // 過去データに旧IDが残っている場合に
+  // 「S0002」のような表示にならないため保持。
+  // ============================================================
+
+  const legacyStaffNames = {
+    S0001: "大久保 和恵",
+    S0002: "宮 麻衣子",
+    S0003: "鈴木 由香",
+    S0004: "小野 瑞季",
+    S0005: "番場 みづい",
+    S0006: "田島 雄弥",
+    S0007: "山本 耕平",
+    S0008: "井伊 啓"
   };
 
 
@@ -131,24 +154,31 @@
     staff(id) {
       return (
         master.staff.find(
-          (item) => item.id === id
-        )?.name || id
+          (item) =>
+            item.id === id
+        )?.name ||
+        legacyStaffNames[id] ||
+        id
       );
     },
 
     participant(id) {
       return (
         master.participants.find(
-          (item) => item.id === id
-        )?.name || id
+          (item) =>
+            item.id === id
+        )?.name ||
+        id
       );
     },
 
     flyer(id) {
       return (
         master.flyers.find(
-          (item) => item.id === id
-        )?.name || id
+          (item) =>
+            item.id === id
+        )?.name ||
+        id
       );
     }
   };
@@ -159,36 +189,55 @@
   // ============================================================
 
   function todayIso() {
-    const now = new Date();
+    const now =
+      new Date();
 
     const local =
       new Date(
         now.getTime() -
-        now.getTimezoneOffset() * 60000
+        now.getTimezoneOffset() *
+          60000
       );
 
     return local
       .toISOString()
-      .slice(0, 10);
+      .slice(
+        0,
+        10
+      );
   }
 
 
   function currentYm() {
-    return todayIso().slice(0, 7);
+    return todayIso()
+      .slice(
+        0,
+        7
+      );
   }
 
 
-  function formatNumber(value) {
+  function formatNumber(
+    value
+  ) {
     return Number(
-      value || 0
-    ).toLocaleString("ja-JP");
+      value ||
+      0
+    ).toLocaleString(
+      "ja-JP"
+    );
   }
 
 
-  function sleep(ms) {
+  function sleep(
+    ms
+  ) {
     return new Promise(
       (resolve) =>
-        setTimeout(resolve, ms)
+        setTimeout(
+          resolve,
+          ms
+        )
     );
   }
 
@@ -244,7 +293,9 @@
       "is-hidden"
     );
 
-    if (!auth.signedIn) {
+    if (
+      !auth.signedIn
+    ) {
       signedOut.classList.remove(
         "is-hidden"
       );
@@ -286,14 +337,17 @@
 
     if (userEmail) {
       userEmail.textContent =
-        auth.user?.email || "";
+        auth.user?.email ||
+        "";
     }
 
     if (!permissionStatus) {
       return;
     }
 
-    if (auth.authorized) {
+    if (
+      auth.authorized
+    ) {
       permissionStatus.textContent =
         "✓ SeedStudio職員として認証済み";
 
@@ -343,7 +397,9 @@
       false
     );
 
-    console.error(message);
+    console.error(
+      message
+    );
   }
 
 
@@ -354,7 +410,8 @@
   const dataRepository = {
     cache: [],
 
-    mode: "loading",
+    mode:
+      "loading",
 
 
     loadLocal() {
@@ -368,9 +425,13 @@
       }
 
       try {
-        return JSON.parse(raw);
+        return JSON.parse(
+          raw
+        );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.warn(
           "Local data parse failed.",
           error
@@ -381,16 +442,21 @@
     },
 
 
-    saveLocal(records) {
+    saveLocal(
+      records
+    ) {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify(records)
+        JSON.stringify(
+          records
+        )
       );
     },
 
 
     async waitForFirebaseBridge(
-      timeoutMs = 10000
+      timeoutMs =
+        10000
     ) {
       const started =
         Date.now();
@@ -400,7 +466,8 @@
         !window.SeedStudioAuth
       ) {
         if (
-          Date.now() - started >
+          Date.now() -
+            started >
           timeoutMs
         ) {
           throw new Error(
@@ -408,7 +475,9 @@
           );
         }
 
-        await sleep(100);
+        await sleep(
+          100
+        );
       }
     },
 
@@ -443,7 +512,9 @@
         await this
           .reloadFromFirestore();
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           "Firebase initialization failed.",
           error
@@ -478,7 +549,9 @@
 
     async reloadFromFirestore() {
       if (
-        !state.authState.authorized
+        !state
+          .authState
+          .authorized
       ) {
         return;
       }
@@ -490,11 +563,16 @@
 
       this.cache =
         records.sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             (
-              b.postingDate || ""
+              b.postingDate ||
+              ""
             ).localeCompare(
-              a.postingDate || ""
+              a.postingDate ||
+              ""
             )
         );
 
@@ -507,9 +585,13 @@
     },
 
 
-    async add(record) {
+    async add(
+      record
+    ) {
       if (
-        !state.authState.authorized
+        !state
+          .authState
+          .authorized
       ) {
         throw new Error(
           "LOGIN_REQUIRED"
@@ -529,11 +611,16 @@
         );
 
         this.cache.sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             (
-              b.postingDate || ""
+              b.postingDate ||
+              ""
             ).localeCompare(
-              a.postingDate || ""
+              a.postingDate ||
+              ""
             )
         );
 
@@ -545,11 +632,16 @@
           "firestore";
 
         return {
-          mode: "firestore",
-          record: saved
+          mode:
+            "firestore",
+
+          record:
+            saved
         };
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           "Firestore save failed.",
           error
@@ -567,7 +659,9 @@
           "local";
 
         return {
-          mode: "local",
+          mode:
+            "local",
+
           record
         };
       }
@@ -604,7 +698,8 @@
   function setMapStatus(
     selector,
     message,
-    isError = false
+    isError =
+      false
   ) {
     const element =
       $(selector);
@@ -650,8 +745,11 @@
       );
     }
 
-    if (state.mapsPromise) {
-      return state.mapsPromise;
+    if (
+      state.mapsPromise
+    ) {
+      return state
+        .mapsPromise;
     }
 
     const key =
@@ -669,13 +767,16 @@
           )
         );
 
-      return state.mapsPromise;
+      return state
+        .mapsPromise;
     }
 
     state.mapsPromise =
       new Promise(
-        (resolve, reject) => {
-
+        (
+          resolve,
+          reject
+        ) => {
           window
             .__seedStudioMapsReady =
             () => {
@@ -692,7 +793,9 @@
           script.src =
             "https://maps.googleapis.com/maps/api/js" +
             "?key=" +
-            encodeURIComponent(key) +
+            encodeURIComponent(
+              key
+            ) +
             "&callback=__seedStudioMapsReady" +
             "&v=weekly";
 
@@ -717,7 +820,8 @@
         }
       );
 
-    return state.mapsPromise;
+    return state
+      .mapsPromise;
   }
 
 
@@ -725,9 +829,15 @@
     coordinates
   ) {
     return (
-      coordinates || []
+      coordinates ||
+      []
     ).map(
-      ([lng, lat]) => ({
+      (
+        [
+          lng,
+          lat
+        ]
+      ) => ({
         lat,
         lng
       })
@@ -746,7 +856,8 @@
     }
 
     if (
-      !coordinates?.length
+      !coordinates
+        ?.length
     ) {
       map.setCenter(
         fallbackCenter
@@ -764,7 +875,12 @@
         .LatLngBounds();
 
     coordinates.forEach(
-      ([lng, lat]) => {
+      (
+        [
+          lng,
+          lat
+        ]
+      ) => {
         bounds.extend({
           lat,
           lng
@@ -773,7 +889,8 @@
     );
 
     if (
-      coordinates.length === 1
+      coordinates.length ===
+      1
     ) {
       map.setCenter({
         lat:
@@ -783,7 +900,9 @@
           coordinates[0][0]
       });
 
-      map.setZoom(17);
+      map.setZoom(
+        17
+      );
 
     } else {
       map.fitBounds(
@@ -798,15 +917,19 @@
     return dataRepository
       .load()
       .filter(
-        (record) =>
+        (
+          record
+        ) =>
           record.area?.type ===
             "Polygon" &&
           Array.isArray(
-            record.area.coordinates
+            record.area
+              .coordinates
           ) &&
           record.area
             .coordinates
-            .length >= 3
+            .length >=
+            3
       );
   }
 
@@ -816,25 +939,33 @@
   // ============================================================
 
   function resetDraft() {
-    state.mapPoints = [];
+    state.mapPoints =
+      [];
 
     state.draft = {
       postingDate:
         todayIso(),
 
+      // 田島さんを初期選択にする
       staffId:
-        master.staff[0].id,
+        "S0006",
 
       flyerId:
-        master.flyers[0].id,
+        master
+          .flyers[0]
+          .id,
 
-      participantIds: [],
+      participantIds:
+        [],
 
-      area: null,
+      area:
+        null,
 
-      quantity: 0,
+      quantity:
+        0,
 
-      participantSteps: {}
+      participantSteps:
+        {}
     };
 
     const postingDate =
@@ -849,45 +980,56 @@
     const quantityInput =
       $("#quantityInput");
 
-    if (postingDate) {
+    if (
+      postingDate
+    ) {
       postingDate.value =
         state.draft
           .postingDate;
     }
 
-    if (staffSelect) {
+    if (
+      staffSelect
+    ) {
       staffSelect.value =
         state.draft
           .staffId;
     }
 
-    if (flyerSelect) {
+    if (
+      flyerSelect
+    ) {
       flyerSelect.value =
         state.draft
           .flyerId;
     }
 
-    if (quantityInput) {
+    if (
+      quantityInput
+    ) {
       quantityInput.value =
         "";
     }
 
-    $$("#participantList input")
-      .forEach(
-        (input) => {
-          input.checked =
-            false;
+    $$(
+      "#participantList input"
+    ).forEach(
+      (
+        input
+      ) => {
+        input.checked =
+          false;
 
-          input
-            .closest(
-              ".checkbox-row"
-            )
-            ?.classList
-            .remove(
-              "is-selected"
-            );
-        }
-      );
+        input
+          .closest(
+            ".checkbox-row"
+          )
+          ?.classList
+          .remove(
+            "is-selected"
+          );
+      }
+    );
 
     clearDraftMapGraphics();
   }
@@ -903,25 +1045,33 @@
     state.currentView =
       view;
 
-    $$(".view").forEach(
-      (element) => {
-        element
-          .classList
-          .toggle(
-            "is-active",
-            element.dataset.view ===
-              view
-          );
-      }
-    );
+    $$(".view")
+      .forEach(
+        (
+          element
+        ) => {
+          element
+            .classList
+            .toggle(
+              "is-active",
+              element
+                .dataset
+                .view ===
+                view
+            );
+        }
+      );
 
     const backButton =
       $("#backButton");
 
-    if (backButton) {
+    if (
+      backButton
+    ) {
       backButton.classList.toggle(
         "is-hidden",
-        view === "home"
+        view ===
+          "home"
       );
     }
 
@@ -954,14 +1104,17 @@
     const pageTitle =
       $("#pageTitle");
 
-    if (pageTitle) {
+    if (
+      pageTitle
+    ) {
       pageTitle.textContent =
         titles[view] ||
         "SeedStudio Posting";
     }
 
     if (
-      view === "home"
+      view ===
+      "home"
     ) {
       renderHome();
     }
@@ -984,7 +1137,8 @@
     }
 
     if (
-      view === "success"
+      view ===
+      "success"
     ) {
       renderSuccess();
     }
@@ -997,13 +1151,15 @@
     }
 
     if (
-      view === "history"
+      view ===
+      "history"
     ) {
       renderHistory();
     }
 
     if (
-      view === "map"
+      view ===
+      "map"
     ) {
       window.setTimeout(
         renderMapStatus,
@@ -1060,27 +1216,37 @@
       .innerHTML =
       master.staff
         .map(
-          (item) =>
+          (
+            item
+          ) =>
             `<option value="${item.id}">${item.name}</option>`
         )
-        .join("");
+        .join(
+          ""
+        );
 
 
     $("#flyerSelect")
       .innerHTML =
       master.flyers
         .map(
-          (item) =>
+          (
+            item
+          ) =>
             `<option value="${item.id}">${item.name}</option>`
         )
-        .join("");
+        .join(
+          ""
+        );
 
 
     $("#participantList")
       .innerHTML =
       master.participants
         .map(
-          (item) => `
+          (
+            item
+          ) => `
             <label class="checkbox-row">
               <input
                 type="checkbox"
@@ -1092,17 +1258,23 @@
             </label>
           `
         )
-        .join("");
+        .join(
+          ""
+        );
 
 
     $("#achievementParticipantSelect")
       .innerHTML =
       master.participants
         .map(
-          (item) =>
+          (
+            item
+          ) =>
             `<option value="${item.id}">${item.name}</option>`
         )
-        .join("");
+        .join(
+          ""
+        );
   }
 
 
@@ -1118,7 +1290,9 @@
       dataRepository
         .load()
         .filter(
-          (record) =>
+          (
+            record
+          ) =>
             (
               record.postingDate ||
               ""
@@ -1183,7 +1357,10 @@
     $("#summaryMonth")
       .textContent =
       `${Number(
-        ym.slice(5, 7)
+        ym.slice(
+          5,
+          7
+        )
       )}月`;
 
     $("#homeTotalQuantity")
@@ -1228,7 +1405,9 @@
       $$(
         "#participantList input:checked"
       ).map(
-        (input) =>
+        (
+          input
+        ) =>
           input.value
       );
   }
@@ -1240,7 +1419,8 @@
     const ok =
       state.draft
         .participantIds
-        .length > 0;
+        .length >
+      0;
 
     $("#participantError")
       .classList
@@ -1261,8 +1441,12 @@
     state
       .postingMarkers
       .forEach(
-        (marker) =>
-          marker.setMap(null)
+        (
+          marker
+        ) =>
+          marker.setMap(
+            null
+          )
       );
 
     state.postingMarkers =
@@ -1273,7 +1457,9 @@
     ) {
       state
         .postingPolygon
-        .setMap(null);
+        .setMap(
+          null
+        );
 
       state.postingPolygon =
         null;
@@ -1282,7 +1468,9 @@
     const confirmButton =
       $("#confirmMapButton");
 
-    if (confirmButton) {
+    if (
+      confirmButton
+    ) {
       confirmButton.disabled =
         true;
     }
@@ -1290,7 +1478,9 @@
     const warning =
       $("#overlapWarning");
 
-    if (warning) {
+    if (
+      warning
+    ) {
       warning.classList.add(
         "is-hidden"
       );
@@ -1309,8 +1499,12 @@
     state
       .postingMarkers
       .forEach(
-        (marker) =>
-          marker.setMap(null)
+        (
+          marker
+        ) =>
+          marker.setMap(
+            null
+          )
       );
 
     state.postingMarkers =
@@ -1321,7 +1515,9 @@
     ) {
       state
         .postingPolygon
-        .setMap(null);
+        .setMap(
+          null
+        );
     }
 
     const path =
@@ -1330,7 +1526,8 @@
       );
 
     if (
-      path.length >= 2
+      path.length >=
+      2
     ) {
       state.postingPolygon =
         new google.maps
@@ -1351,7 +1548,8 @@
               "#2F6D4F",
 
             fillOpacity:
-              path.length >= 3
+              path.length >=
+              3
                 ? 0.22
                 : 0.08,
 
@@ -1383,7 +1581,8 @@
               label: {
                 text:
                   String(
-                    index + 1
+                    index +
+                    1
                   ),
 
                 color:
@@ -1395,7 +1594,8 @@
 
               title:
                 `頂点 ${
-                  index + 1
+                  index +
+                  1
                 }`
             });
 
@@ -1410,7 +1610,8 @@
     $("#confirmMapButton")
       .disabled =
       state.mapPoints
-        .length < 3;
+        .length <
+      3;
 
     updateOverlapWarning();
   }
@@ -1420,8 +1621,12 @@
     state
       .postingHistoryPolygons
       .forEach(
-        (polygon) =>
-          polygon.setMap(null)
+        (
+          polygon
+        ) =>
+          polygon.setMap(
+            null
+          )
       );
 
     state.postingHistoryPolygons =
@@ -1444,7 +1649,8 @@
             Math.max(
               0.08,
               0.18 -
-              index * 0.01
+              index *
+                0.01
             );
 
           const polygon =
@@ -1452,7 +1658,8 @@
               .Polygon({
                 paths:
                   toLatLngPath(
-                    record.area
+                    record
+                      .area
                       .coordinates
                   ),
 
@@ -1534,7 +1741,9 @@
         state.postingMap
           .addListener(
             "click",
-            (event) => {
+            (
+              event
+            ) => {
               state.mapPoints
                 .push([
                   event.latLng.lng(),
@@ -1555,7 +1764,8 @@
       );
 
       if (
-        !state.mapPoints.length
+        !state.mapPoints
+          .length
       ) {
         locateCurrentPosition(
           false
@@ -1578,7 +1788,9 @@
         50
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Posting map error.",
         error
@@ -1598,13 +1810,16 @@
 
 
   function locateCurrentPosition(
-    showError = true
+    showError =
+      true
   ) {
     if (
       !navigator.geolocation ||
       !state.postingMap
     ) {
-      if (showError) {
+      if (
+        showError
+      ) {
         alert(
           "この端末では現在地を取得できません。"
         );
@@ -1624,20 +1839,26 @@
 
     navigator.geolocation
       .getCurrentPosition(
-        (position) => {
+        (
+          position
+        ) => {
           state.postingMap
             .setCenter({
               lat:
-                position.coords
+                position
+                  .coords
                   .latitude,
 
               lng:
-                position.coords
+                position
+                  .coords
                   .longitude
             });
 
           state.postingMap
-            .setZoom(17);
+            .setZoom(
+              17
+            );
 
           button.disabled =
             false;
@@ -1653,7 +1874,9 @@
           button.textContent =
             "◎ 現在地へ";
 
-          if (showError) {
+          if (
+            showError
+          ) {
             alert(
               "現在地を取得できませんでした。位置情報の許可を確認してください。"
             );
@@ -1682,53 +1905,76 @@
     point,
     polygon
   ) {
-    const [x, y] =
+    const [
+      x,
+      y
+    ] =
       point;
 
     let inside =
       false;
 
     for (
-      let i = 0,
-          j =
-            polygon.length - 1;
+      let i =
+          0,
+        j =
+          polygon.length -
+          1;
 
       i <
       polygon.length;
 
-      j = i++
+      j =
+        i++
     ) {
-      const [xi, yi] =
+      const [
+        xi,
+        yi
+      ] =
         polygon[i];
 
-      const [xj, yj] =
+      const [
+        xj,
+        yj
+      ] =
         polygon[j];
 
       const intersects =
         (
-          (yi > y) !==
-          (yj > y)
+          (
+            yi >
+            y
+          ) !==
+          (
+            yj >
+            y
+          )
         ) &&
         (
           x <
           (
             (
-              xj - xi
+              xj -
+              xi
             ) *
             (
-              y - yi
+              y -
+              yi
             )
           ) /
           (
             (
-              yj - yi
+              yj -
+              yi
             ) ||
             Number.EPSILON
           ) +
           xi
         );
 
-      if (intersects) {
+      if (
+        intersects
+      ) {
         inside =
           !inside;
       }
@@ -1745,26 +1991,33 @@
   ) {
     const value =
       (
-        b[1] - a[1]
+        b[1] -
+        a[1]
       ) *
       (
-        c[0] - b[0]
+        c[0] -
+        b[0]
       ) -
       (
-        b[0] - a[0]
+        b[0] -
+        a[0]
       ) *
       (
-        c[1] - b[1]
+        c[1] -
+        b[1]
       );
 
     if (
-      Math.abs(value) <
+      Math.abs(
+        value
+      ) <
       1e-12
     ) {
       return 0;
     }
 
-    return value > 0
+    return value >
+      0
       ? 1
       : 2;
   }
@@ -1805,8 +2058,10 @@
       );
 
     return (
-      o1 !== o2 &&
-      o3 !== o4
+      o1 !==
+        o2 &&
+      o3 !==
+        o4
     );
   }
 
@@ -1817,14 +2072,18 @@
   ) {
     if (
       a.some(
-        (point) =>
+        (
+          point
+        ) =>
           pointInPolygon(
             point,
             b
           )
       ) ||
       b.some(
-        (point) =>
+        (
+          point
+        ) =>
           pointInPolygon(
             point,
             a
@@ -1835,8 +2094,10 @@
     }
 
     for (
-      let i = 0;
-      i < a.length;
+      let i =
+        0;
+      i <
+      a.length;
       i++
     ) {
       const a1 =
@@ -1845,14 +2106,17 @@
       const a2 =
         a[
           (
-            i + 1
+            i +
+            1
           ) %
           a.length
         ];
 
       for (
-        let j = 0;
-        j < b.length;
+        let j =
+          0;
+        j <
+        b.length;
         j++
       ) {
         const b1 =
@@ -1861,7 +2125,8 @@
         const b2 =
           b[
             (
-              j + 1
+              j +
+              1
             ) %
             b.length
           ];
@@ -1888,7 +2153,8 @@
       $("#overlapWarning");
 
     if (
-      state.mapPoints.length <
+      state.mapPoints
+        .length <
       3
     ) {
       warning.classList.add(
@@ -1901,15 +2167,20 @@
     const overlapped =
       getGeoRecords()
         .find(
-          (record) =>
+          (
+            record
+          ) =>
             polygonsOverlap(
               state.mapPoints,
-              record.area
+              record
+                .area
                 .coordinates
             )
         );
 
-    if (overlapped) {
+    if (
+      overlapped
+    ) {
       warning.innerHTML =
         `⚠ この範囲は過去の配布履歴と重なっています` +
         `<br>` +
@@ -1942,7 +2213,9 @@
       state.draft
         .participantIds
         .map(
-          (id) => `
+          (
+            id
+          ) => `
             <div class="participant-step-card">
               <strong>
                 ${names.participant(id)}
@@ -1958,7 +2231,9 @@
                   data-id="${id}"
                   value="${
                     state.draft
-                      .participantSteps[id] ||
+                      .participantSteps[
+                        id
+                      ] ||
                     ""
                   }"
                 >
@@ -1970,17 +2245,23 @@
             </div>
           `
         )
-        .join("");
+        .join(
+          ""
+        );
 
     $$(".js-step-input")
       .forEach(
-        (input) => {
+        (
+          input
+        ) => {
           input.addEventListener(
             "input",
             () => {
               state.draft
                 .participantSteps[
-                  input.dataset.id
+                  input
+                    .dataset
+                    .id
                 ] =
                 Number(
                   input.value ||
@@ -1995,7 +2276,8 @@
 
     $("#quantityInput")
       .value =
-      state.draft.quantity ||
+      state.draft
+        .quantity ||
       "";
 
     renderConfirm();
@@ -2014,15 +2296,21 @@
       state.draft
         .participantIds
         .map(
-          (id) =>
+          (
+            id
+          ) =>
             `${names.participant(id)} ` +
             `${formatNumber(
               state.draft
-                .participantSteps[id] ||
+                .participantSteps[
+                  id
+                ] ||
               0
             )}歩`
         )
-        .join("<br>");
+        .join(
+          "<br>"
+        );
 
     $("#confirmContent")
       .innerHTML =
@@ -2052,7 +2340,9 @@
                 .map(
                   names.participant
                 )
-                .join("・")
+                .join(
+                  "・"
+                )
             }
           </b>
         </div>
@@ -2106,25 +2396,26 @@
         !state.confirmMap
       ) {
         state.confirmMap =
-          new google.maps.Map(
-            $("#confirmGoogleMap"),
-            {
-              center:
-                DEFAULT_CENTER,
+          new google.maps
+            .Map(
+              $("#confirmGoogleMap"),
+              {
+                center:
+                  DEFAULT_CENTER,
 
-              zoom:
-                DEFAULT_ZOOM,
+                zoom:
+                  DEFAULT_ZOOM,
 
-              disableDefaultUI:
-                true,
+                disableDefaultUI:
+                  true,
 
-              gestureHandling:
-                "none",
+                gestureHandling:
+                  "none",
 
-              clickableIcons:
-                false
-            }
-          );
+                clickableIcons:
+                  false
+              }
+            );
       }
 
       if (
@@ -2132,7 +2423,9 @@
       ) {
         state
           .confirmPolygon
-          .setMap(null);
+          .setMap(
+            null
+          );
       }
 
       state.confirmPolygon =
@@ -2140,7 +2433,8 @@
           .Polygon({
             paths:
               toLatLngPath(
-                state.draft.area
+                state.draft
+                  .area
                   .coordinates
               ),
 
@@ -2168,7 +2462,8 @@
 
       fitMapToCoordinates(
         state.confirmMap,
-        state.draft.area
+        state.draft
+          .area
           .coordinates
       );
 
@@ -2182,7 +2477,9 @@
         50
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Confirm map error.",
         error
@@ -2226,12 +2523,17 @@
       state.draft
         .participantIds
         .every(
-          (id) =>
+          (
+            id
+          ) =>
             Number(
               state.draft
-                .participantSteps[id] ||
+                .participantSteps[
+                  id
+                ] ||
               0
-            ) > 0
+            ) >
+            0
         );
 
     if (
@@ -2276,14 +2578,18 @@
         state.draft
           .participantIds
           .map(
-            (id) => ({
+            (
+              id
+            ) => ({
               participantId:
                 id,
 
               steps:
                 Number(
                   state.draft
-                    .participantSteps[id]
+                    .participantSteps[
+                      id
+                    ]
                 )
             })
           ),
@@ -2299,7 +2605,9 @@
     try {
       const result =
         await dataRepository
-          .add(record);
+          .add(
+            record
+          );
 
       result.record
         .storageMode =
@@ -2312,7 +2620,9 @@
         "success"
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Save failed.",
         error
@@ -2349,7 +2659,9 @@
     const record =
       state.lastSavedRecord;
 
-    if (!record) {
+    if (
+      !record
+    ) {
       return;
     }
 
@@ -2450,7 +2762,9 @@
         []
       )
         .map(
-          (participant) =>
+          (
+            participant
+          ) =>
             `
               <div class="participant-result">
                 ${names.participant(
@@ -2467,7 +2781,9 @@
               </div>
             `
         )
-        .join("");
+        .join(
+          ""
+        );
   }
 
 
@@ -2480,7 +2796,10 @@
       dataRepository
         .load()
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             (
               b.postingDate ||
               ""
@@ -2502,7 +2821,9 @@
       .innerHTML =
       records
         .map(
-          (record) => `
+          (
+            record
+          ) => `
             <article class="history-item">
               <b>
                 ${record.postingDate}
@@ -2524,13 +2845,17 @@
                     []
                   )
                     .map(
-                      (participant) =>
+                      (
+                        participant
+                      ) =>
                         names.participant(
                           participant
                             .participantId
                         )
                     )
-                    .join("・")
+                    .join(
+                      "・"
+                    )
                 }
 
                 <br>
@@ -2542,7 +2867,9 @@
             </article>
           `
         )
-        .join("");
+        .join(
+          ""
+        );
   }
 
 
@@ -2558,7 +2885,9 @@
       .innerHTML =
       records
         .map(
-          (record) => `
+          (
+            record
+          ) => `
             <article class="history-item">
               <b>
                 ${record.postingDate}
@@ -2576,7 +2905,9 @@
             </article>
           `
         )
-        .join("");
+        .join(
+          ""
+        );
 
     const statusId =
       "#historyMapStatus";
@@ -2621,8 +2952,12 @@
       state
         .historyPolygons
         .forEach(
-          (polygon) =>
-            polygon.setMap(null)
+          (
+            polygon
+          ) =>
+            polygon.setMap(
+              null
+            )
         );
 
       state.historyPolygons =
@@ -2640,7 +2975,8 @@
           index
         ) => {
           allCoordinates.push(
-            ...record.area
+            ...record
+              .area
               .coordinates
           );
 
@@ -2648,7 +2984,8 @@
             Math.max(
               0.08,
               0.24 -
-              index * 0.015
+              index *
+                0.015
             );
 
           const polygon =
@@ -2656,7 +2993,8 @@
               .Polygon({
                 paths:
                   toLatLngPath(
-                    record.area
+                    record
+                      .area
                       .coordinates
                   ),
 
@@ -2713,7 +3051,9 @@
         50
       );
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "History map error.",
         error
@@ -2747,12 +3087,16 @@
       dataRepository
         .load()
         .filter(
-          (record) =>
+          (
+            record
+          ) =>
             (
               record.participants ||
               []
             ).some(
-              (participant) =>
+              (
+                participant
+              ) =>
                 participant
                   .participantId ===
                 participantId
@@ -2770,15 +3114,19 @@
               record.participants ||
               []
             ).find(
-              (item) =>
-                item.participantId ===
+              (
+                item
+              ) =>
+                item
+                  .participantId ===
                 participantId
             );
 
           return (
             total +
             Number(
-              participant?.steps ||
+              participant
+                ?.steps ||
               0
             )
           );
@@ -2789,7 +3137,9 @@
     const monthSteps =
       records
         .filter(
-          (record) =>
+          (
+            record
+          ) =>
             (
               record.postingDate ||
               ""
@@ -2807,15 +3157,19 @@
                 record.participants ||
                 []
               ).find(
-                (item) =>
-                  item.participantId ===
+                (
+                  item
+                ) =>
+                  item
+                    .participantId ===
                   participantId
               );
 
             return (
               total +
               Number(
-                participant?.steps ||
+                participant
+                  ?.steps ||
                 0
               )
             );
@@ -2841,13 +3195,17 @@
       Math.max(
         0,
         ...records.map(
-          (record) =>
+          (
+            record
+          ) =>
             Number(
               (
                 record.participants ||
                 []
               ).find(
-                (participant) =>
+                (
+                  participant
+                ) =>
                   participant
                     .participantId ===
                   participantId
@@ -2859,7 +3217,9 @@
 
     const nextGoal =
       milestoneSteps.find(
-        (goal) =>
+        (
+          goal
+        ) =>
           goal >
           totalSteps
       ) ||
@@ -2874,7 +3234,9 @@
       ]
         .reverse()
         .find(
-          (goal) =>
+          (
+            goal
+          ) =>
             goal <=
             totalSteps
         ) ||
@@ -2957,7 +3319,9 @@
       .innerHTML =
       milestoneSteps
         .map(
-          (goal) => `
+          (
+            goal
+          ) => `
             <div
               class="
                 milestone
@@ -2986,7 +3350,9 @@
             </div>
           `
         )
-        .join("");
+        .join(
+          ""
+        );
   }
 
 
@@ -3034,18 +3400,22 @@
           "Googleログインが完了しました。"
         );
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.error(
           "Firestore read failed.",
           error
         );
 
         alert(
-          "Googleログインは成功しました。Firestoreの読み取り権限はまだ設定されていません。"
+          "Googleログインは成功しました。Firestoreの読み取り権限を確認してください。"
         );
       }
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Login failed.",
         error
@@ -3068,7 +3438,9 @@
           .signOut();
       }
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Logout failed.",
         error
@@ -3076,10 +3448,17 @@
     }
 
     state.authState = {
-      signedIn: false,
-      authorized: false,
-      user: null,
-      staff: null
+      signedIn:
+        false,
+
+      authorized:
+        false,
+
+      user:
+        null,
+
+      staff:
+        null
     };
 
     dataRepository.mode =
@@ -3093,7 +3472,9 @@
 
     renderHome();
 
-    navigate("home");
+    navigate(
+      "home"
+    );
   }
 
 
@@ -3105,7 +3486,9 @@
     const loginButton =
       $("#googleLoginButton");
 
-    if (loginButton) {
+    if (
+      loginButton
+    ) {
       loginButton
         .addEventListener(
           "click",
@@ -3117,7 +3500,9 @@
     const logoutButton =
       $("#googleLogoutButton");
 
-    if (logoutButton) {
+    if (
+      logoutButton
+    ) {
       logoutButton
         .addEventListener(
           "click",
@@ -3128,7 +3513,9 @@
 
     $$("[data-nav]")
       .forEach(
-        (button) => {
+        (
+          button
+        ) => {
           button.addEventListener(
             "click",
             () => {
@@ -3139,14 +3526,17 @@
               }
 
               if (
-                button.dataset.nav ===
+                button.dataset
+                  .nav ===
                 "register-basic"
               ) {
                 resetDraft();
               }
 
               navigate(
-                button.dataset.nav
+                button
+                  .dataset
+                  .nav
               );
             }
           );
@@ -3164,11 +3554,14 @@
     $("#participantList")
       ?.addEventListener(
         "change",
-        (event) => {
+        (
+          event
+        ) => {
           if (
-            !event.target.matches(
-              "input"
-            )
+            !event.target
+              .matches(
+                "input"
+              )
           ) {
             return;
           }
@@ -3180,7 +3573,8 @@
             ?.classList
             .toggle(
               "is-selected",
-              event.target.checked
+              event.target
+                .checked
             );
         }
       );
@@ -3240,7 +3634,8 @@
         () => {
           if (
             state.mapPoints
-              .length < 3
+              .length <
+            3
           ) {
             return;
           }
@@ -3252,11 +3647,15 @@
             coordinates:
               state.mapPoints
                 .map(
-                  ([lng, lat]) =>
+                  (
                     [
                       lng,
                       lat
                     ]
+                  ) => [
+                    lng,
+                    lat
+                  ]
                 )
           };
 
@@ -3343,7 +3742,8 @@
           if (
             authState.authorized &&
             authState.user?.uid &&
-            authState.user.uid !==
+            authState.user
+              .uid !==
               previousUid
           ) {
             try {
@@ -3352,7 +3752,9 @@
 
               renderHome();
 
-            } catch (error) {
+            } catch (
+              error
+            ) {
               console.warn(
                 "Firestore reload after auth failed.",
                 error
@@ -3379,12 +3781,6 @@
 
     bindEvents();
 
-    /*
-     * Important:
-     * Immediately show a usable auth UI.
-     * Never leave the page permanently on
-     * "ログイン状態を確認しています..."
-     */
     setRegistrationAvailability(
       false
     );
@@ -3393,7 +3789,9 @@
       await dataRepository
         .initialize();
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "Repository initialization error.",
         error
@@ -3410,7 +3808,9 @@
 
     renderHome();
 
-    navigate("home");
+    navigate(
+      "home"
+    );
 
     console.log(
       "SeedStudio Posting ready."
@@ -3422,17 +3822,26 @@
     "DOMContentLoaded",
     () => {
       init().catch(
-        (error) => {
+        (
+          error
+        ) => {
           console.error(
             "SeedStudio Posting initialization failed.",
             error
           );
 
           state.authState = {
-            signedIn: false,
-            authorized: false,
-            user: null,
-            staff: null
+            signedIn:
+              false,
+
+            authorized:
+              false,
+
+            user:
+              null,
+
+            staff:
+              null
           };
 
           showAuthError(
@@ -3441,7 +3850,9 @@
 
           renderHome();
 
-          navigate("home");
+          navigate(
+            "home"
+          );
         }
       );
     }
