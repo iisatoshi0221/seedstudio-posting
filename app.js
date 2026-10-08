@@ -4,10 +4,10 @@
   // ============================================================
   // SeedStudio Posting
   // app.js
+  // Phase 2 - Posting participant management
   // ============================================================
 
-  const STORAGE_KEY =
-    "seedstudio-posting-v0.1-records";
+  const STORAGE_KEY = "seedstudio-posting-v0.1-records";
 
   const DEFAULT_CENTER = {
     lat: 35.6074,
@@ -16,52 +16,19 @@
 
   const DEFAULT_ZOOM = 14;
 
-
   // ============================================================
-  // Temporary master data
+  // Temporary local masters
   //
-  // Phase 1:
-  // Postingで実際に担当職員として選択する職員だけを表示。
-  //
-  // S0001 は既存データとの互換性維持のため
-  // 大久保 和恵さんのIDをそのまま使用。
-  //
-  // S0006〜S0008 は今回追加。
+  // Staff/FlyerはPhase 4でFirestore masterへ移行予定。
+  // ParticipantsはPhase 2からSSS共通 users + postingParticipants を使用。
   // ============================================================
 
   const master = {
     staff: [
-      {
-        id: "S0006",
-        name: "田島 雄弥"
-      },
-      {
-        id: "S0007",
-        name: "山本 耕平"
-      },
-      {
-        id: "S0008",
-        name: "井伊 啓"
-      },
-      {
-        id: "S0001",
-        name: "大久保 和恵"
-      }
-    ],
-
-    participants: [
-      {
-        id: "U0001",
-        name: "Aさん"
-      },
-      {
-        id: "U0002",
-        name: "Bさん"
-      },
-      {
-        id: "U0003",
-        name: "Cさん"
-      }
+      { id: "S0006", name: "田島 雄弥" },
+      { id: "S0007", name: "山本 耕平" },
+      { id: "S0008", name: "井伊 啓" },
+      { id: "S0001", name: "大久保 和恵" }
     ],
 
     flyers: [
@@ -72,15 +39,7 @@
     ]
   };
 
-
-  // ============================================================
-  // Legacy staff labels
-  //
-  // 新規登録画面には表示しないが、
-  // 過去データに旧IDが残っている場合に
-  // 「S0002」のような表示にならないため保持。
-  // ============================================================
-
+  // 過去の職員IDを履歴表示で解決するため保持
   const legacyStaffNames = {
     S0001: "大久保 和恵",
     S0002: "宮 麻衣子",
@@ -92,10 +51,22 @@
     S0008: "井伊 啓"
   };
 
-
-  // ============================================================
-  // State
-  // ============================================================
+  // 旧Postingテストデータ表示互換
+  const legacyParticipantNames = {
+    U0001: "長島 栄一",
+    U0002: "佐藤 彩衣",
+    U0003: "能瀬 望結",
+    U0004: "出口 朋茄",
+    U0005: "安田 孝博",
+    U0006: "小山 悟",
+    U0007: "宮 麻衣子",
+    U0008: "鈴木 由香",
+    U0009: "小野 瑞季",
+    U0010: "冨樫 浩一",
+    U0011: "黒川 裕明",
+    U0012: "久保田 真琴",
+    U0013: "白澤 英哉"
+  };
 
   const state = {
     currentView: "home",
@@ -106,6 +77,15 @@
       user: null,
       staff: null
     },
+
+    // Firestoreから取得したSSS利用者
+    participantCandidates: [],
+
+    // postingEnabled === true の利用者
+    postingParticipants: [],
+
+    participantLoading: false,
+    participantError: null,
 
     mapPoints: [],
     draft: {},
@@ -125,7 +105,6 @@
     historyPolygons: []
   };
 
-
   const milestoneSteps = [
     10000,
     50000,
@@ -134,29 +113,59 @@
     500000
   ];
 
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
 
   // ============================================================
-  // DOM helpers
+  // Generic helpers
   // ============================================================
 
-  const $ = (selector) =>
-    document.querySelector(selector);
+  function todayIso() {
+    const now = new Date();
+    const local = new Date(
+      now.getTime() - now.getTimezoneOffset() * 60000
+    );
 
-  const $$ = (selector) =>
-    [...document.querySelectorAll(selector)];
+    return local.toISOString().slice(0, 10);
+  }
 
+  function currentYm() {
+    return todayIso().slice(0, 7);
+  }
 
-  // ============================================================
-  // Name helpers
-  // ============================================================
+  function formatNumber(value) {
+    return Number(value || 0).toLocaleString("ja-JP");
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function getParticipantById(id) {
+    return (
+      state.participantCandidates.find(
+        (item) => item.personId === id
+      ) ||
+      state.postingParticipants.find(
+        (item) => item.personId === id
+      ) ||
+      null
+    );
+  }
 
   const names = {
     staff(id) {
       return (
-        master.staff.find(
-          (item) =>
-            item.id === id
-        )?.name ||
+        master.staff.find((item) => item.id === id)?.name ||
         legacyStaffNames[id] ||
         id
       );
@@ -164,169 +173,63 @@
 
     participant(id) {
       return (
-        master.participants.find(
-          (item) =>
-            item.id === id
-        )?.name ||
+        getParticipantById(id)?.name ||
+        legacyParticipantNames[id] ||
         id
       );
     },
 
     flyer(id) {
       return (
-        master.flyers.find(
-          (item) =>
-            item.id === id
-        )?.name ||
+        master.flyers.find((item) => item.id === id)?.name ||
         id
       );
     }
   };
 
-
-  // ============================================================
-  // Generic helpers
-  // ============================================================
-
-  function todayIso() {
-    const now =
-      new Date();
-
-    const local =
-      new Date(
-        now.getTime() -
-        now.getTimezoneOffset() *
-          60000
-      );
-
-    return local
-      .toISOString()
-      .slice(
-        0,
-        10
-      );
-  }
-
-
-  function currentYm() {
-    return todayIso()
-      .slice(
-        0,
-        7
-      );
-  }
-
-
-  function formatNumber(
-    value
-  ) {
-    return Number(
-      value ||
-      0
-    ).toLocaleString(
-      "ja-JP"
-    );
-  }
-
-
-  function sleep(
-    ms
-  ) {
-    return new Promise(
-      (resolve) =>
-        setTimeout(
-          resolve,
-          ms
-        )
-    );
-  }
-
-
   // ============================================================
   // Authentication UI
   // ============================================================
 
-  function setRegistrationAvailability(
-    enabled
-  ) {
-    const button =
-      document.querySelector(
-        '[data-nav="register-basic"]'
-      );
+  function setRegistrationAvailability(enabled) {
+    const button = document.querySelector(
+      '[data-nav="register-basic"]'
+    );
 
     if (!button) {
       return;
     }
 
-    button.disabled =
-      !enabled;
-
-    button.style.opacity =
-      enabled
-        ? "1"
-        : "0.55";
+    button.disabled = !enabled;
+    button.style.opacity = enabled ? "1" : "0.55";
   }
 
-
   function renderAuthState() {
-    const auth =
-      state.authState;
+    const auth = state.authState;
 
-    const loading =
-      $("#authLoading");
+    const loading = $("#authLoading");
+    const signedOut = $("#authSignedOut");
+    const signedIn = $("#authSignedIn");
 
-    const signedOut =
-      $("#authSignedOut");
-
-    const signedIn =
-      $("#authSignedIn");
-
-    if (
-      !loading ||
-      !signedOut ||
-      !signedIn
-    ) {
+    if (!loading || !signedOut || !signedIn) {
       return;
     }
 
-    loading.classList.add(
-      "is-hidden"
-    );
+    loading.classList.add("is-hidden");
 
-    if (
-      !auth.signedIn
-    ) {
-      signedOut.classList.remove(
-        "is-hidden"
-      );
-
-      signedIn.classList.add(
-        "is-hidden"
-      );
-
-      setRegistrationAvailability(
-        false
-      );
-
+    if (!auth.signedIn) {
+      signedOut.classList.remove("is-hidden");
+      signedIn.classList.add("is-hidden");
+      setRegistrationAvailability(false);
       return;
     }
 
-    signedOut.classList.add(
-      "is-hidden"
-    );
+    signedOut.classList.add("is-hidden");
+    signedIn.classList.remove("is-hidden");
 
-    signedIn.classList.remove(
-      "is-hidden"
-    );
-
-    const userName =
-      $("#authUserName");
-
-    const userEmail =
-      $("#authUserEmail");
-
-    const permissionStatus =
-      $("#authPermissionStatus");
+    const userName = $("#authUserName");
+    const userEmail = $("#authUserEmail");
+    const permissionStatus = $("#authPermissionStatus");
 
     if (userName) {
       userName.textContent =
@@ -336,102 +239,56 @@
     }
 
     if (userEmail) {
-      userEmail.textContent =
-        auth.user?.email ||
-        "";
+      userEmail.textContent = auth.user?.email || "";
     }
 
     if (!permissionStatus) {
       return;
     }
 
-    if (
-      auth.authorized
-    ) {
+    if (auth.authorized) {
       permissionStatus.textContent =
         "✓ SeedStudio職員として認証済み";
 
-      permissionStatus.style.color =
-        "#2F6D4F";
+      permissionStatus.style.color = "#2F6D4F";
 
-      setRegistrationAvailability(
-        true
-      );
-
+      setRegistrationAvailability(true);
     } else {
       permissionStatus.textContent =
         "このGoogleアカウントはSeedStudio職員として登録されていません";
 
-      permissionStatus.style.color =
-        "#B54848";
+      permissionStatus.style.color = "#B54848";
 
-      setRegistrationAvailability(
-        false
-      );
+      setRegistrationAvailability(false);
     }
   }
 
+  function showAuthError(message) {
+    $("#authLoading")?.classList.add("is-hidden");
+    $("#authSignedOut")?.classList.remove("is-hidden");
 
-  function showAuthError(
-    message
-  ) {
-    const loading =
-      $("#authLoading");
-
-    const signedOut =
-      $("#authSignedOut");
-
-    if (loading) {
-      loading.classList.add(
-        "is-hidden"
-      );
-    }
-
-    if (signedOut) {
-      signedOut.classList.remove(
-        "is-hidden"
-      );
-    }
-
-    setRegistrationAvailability(
-      false
-    );
-
-    console.error(
-      message
-    );
+    setRegistrationAvailability(false);
+    console.error(message);
   }
-
 
   // ============================================================
-  // Repository
+  // Posting record repository
   // ============================================================
 
   const dataRepository = {
     cache: [],
-
-    mode:
-      "loading",
-
+    mode: "loading",
 
     loadLocal() {
-      const raw =
-        localStorage.getItem(
-          STORAGE_KEY
-        );
+      const raw = localStorage.getItem(STORAGE_KEY);
 
       if (!raw) {
         return [];
       }
 
       try {
-        return JSON.parse(
-          raw
-        );
-
-      } catch (
-        error
-      ) {
+        return JSON.parse(raw);
+      } catch (error) {
         console.warn(
           "Local data parse failed.",
           error
@@ -441,90 +298,58 @@
       }
     },
 
-
-    saveLocal(
-      records
-    ) {
+    saveLocal(records) {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify(
-          records
-        )
+        JSON.stringify(records)
       );
     },
 
-
-    async waitForFirebaseBridge(
-      timeoutMs =
-        10000
-    ) {
-      const started =
-        Date.now();
+    async waitForFirebaseBridge(timeoutMs = 10000) {
+      const started = Date.now();
 
       while (
         !window.SeedStudioFirestore ||
         !window.SeedStudioAuth
       ) {
-        if (
-          Date.now() -
-            started >
-          timeoutMs
-        ) {
+        if (Date.now() - started > timeoutMs) {
           throw new Error(
             "Firebase bridge timeout"
           );
         }
 
-        await sleep(
-          100
-        );
+        await sleep(100);
       }
     },
 
-
     async initialize() {
       try {
-        await this
-          .waitForFirebaseBridge();
+        await this.waitForFirebaseBridge();
 
         const authState =
-          await window
-            .SeedStudioAuth
-            .waitUntilReady();
+          await window.SeedStudioAuth.waitUntilReady();
 
-        state.authState =
-          authState;
-
+        state.authState = authState;
         renderAuthState();
 
-        if (
-          !authState.authorized
-        ) {
-          this.cache =
-            this.loadLocal();
-
-          this.mode =
-            "auth-required";
-
+        if (!authState.authorized) {
+          this.cache = this.loadLocal();
+          this.mode = "auth-required";
           return;
         }
 
-        await this
-          .reloadFromFirestore();
-
-      } catch (
-        error
-      ) {
+        await Promise.all([
+          this.reloadFromFirestore(),
+          participantRepository.reload()
+        ]);
+      } catch (error) {
         console.error(
           "Firebase initialization failed.",
           error
         );
 
-        this.cache =
-          this.loadLocal();
-
-        this.mode =
-          "local";
+        this.cache = this.loadLocal();
+        this.mode = "local";
 
         state.authState = {
           signedIn: false,
@@ -539,3323 +364,637 @@
       }
     },
 
-
     load() {
-      return [
-        ...this.cache
-      ];
+      return [...this.cache];
     },
 
-
     async reloadFromFirestore() {
-      if (
-        !state
-          .authState
-          .authorized
-      ) {
+      if (!state.authState.authorized) {
         return;
       }
 
       const records =
-        await window
-          .SeedStudioFirestore
-          .listPostingRecords();
+        await window.SeedStudioFirestore.listPostingRecords();
 
-      this.cache =
-        records.sort(
-          (
-            a,
-            b
-          ) =>
-            (
-              b.postingDate ||
-              ""
-            ).localeCompare(
-              a.postingDate ||
-              ""
-            )
-        );
-
-      this.mode =
-        "firestore";
-
-      this.saveLocal(
-        this.cache
+      this.cache = records.sort(
+        (a, b) =>
+          (b.postingDate || "").localeCompare(
+            a.postingDate || ""
+          )
       );
+
+      this.mode = "firestore";
+      this.saveLocal(this.cache);
     },
 
-
-    async add(
-      record
-    ) {
-      if (
-        !state
-          .authState
-          .authorized
-      ) {
-        throw new Error(
-          "LOGIN_REQUIRED"
-        );
+    async add(record) {
+      if (!state.authState.authorized) {
+        throw new Error("LOGIN_REQUIRED");
       }
 
       try {
         const saved =
-          await window
-            .SeedStudioFirestore
-            .savePostingRecord(
-              record
-            );
+          await window.SeedStudioFirestore.savePostingRecord(
+            record
+          );
 
-        this.cache.push(
-          saved
-        );
+        this.cache.push(saved);
 
         this.cache.sort(
-          (
-            a,
-            b
-          ) =>
-            (
-              b.postingDate ||
-              ""
-            ).localeCompare(
-              a.postingDate ||
-              ""
+          (a, b) =>
+            (b.postingDate || "").localeCompare(
+              a.postingDate || ""
             )
         );
 
-        this.saveLocal(
-          this.cache
-        );
-
-        this.mode =
-          "firestore";
+        this.saveLocal(this.cache);
+        this.mode = "firestore";
 
         return {
-          mode:
-            "firestore",
-
-          record:
-            saved
+          mode: "firestore",
+          record: saved
         };
-
-      } catch (
-        error
-      ) {
+      } catch (error) {
         console.error(
           "Firestore save failed.",
           error
         );
 
-        this.cache.push(
-          record
-        );
+        this.cache.push(record);
+        this.saveLocal(this.cache);
 
-        this.saveLocal(
-          this.cache
-        );
-
-        this.mode =
-          "local";
+        this.mode = "local";
 
         return {
-          mode:
-            "local",
-
+          mode: "local",
           record
         };
       }
     }
   };
 
-
   // ============================================================
-  // Google Maps
+  // Participant repository
   // ============================================================
 
-  function getMapsApiKey() {
-    return (
-      window
-        .SEEDSTUDIO_CONFIG
-        ?.googleMapsApiKey ||
-      ""
-    );
-  }
+  const participantRepository = {
+    async reload() {
+      if (!state.authState.authorized) {
+        state.participantCandidates = [];
+        state.postingParticipants = [];
+        return;
+      }
 
+      state.participantLoading = true;
+      state.participantError = null;
 
-  function isConfiguredMapsKey(
-    key
-  ) {
-    return (
-      !!key &&
-      !key.includes(
-        "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE"
-      )
-    );
-  }
+      renderParticipantLoadingStates();
 
+      try {
+        const candidates =
+          await window.SeedStudioFirestore
+            .listPostingParticipantCandidates();
 
-  function setMapStatus(
-    selector,
-    message,
-    isError =
-      false
-  ) {
-    const element =
-      $(selector);
+        state.participantCandidates =
+          Array.isArray(candidates)
+            ? [...candidates]
+            : [];
 
-    if (!element) {
-      return;
-    }
+        state.postingParticipants =
+          state.participantCandidates.filter(
+            (person) =>
+              person.postingEnabled === true
+          );
 
-    element.textContent =
-      message;
-
-    element.classList.toggle(
-      "is-error",
-      isError
-    );
-
-    element.classList.remove(
-      "is-hidden"
-    );
-  }
-
-
-  function hideMapStatus(
-    selector
-  ) {
-    const element =
-      $(selector);
-
-    if (element) {
-      element.classList.add(
-        "is-hidden"
-      );
-    }
-  }
-
-
-  function loadGoogleMaps() {
-    if (
-      window.google?.maps
-    ) {
-      return Promise.resolve(
-        window.google.maps
-      );
-    }
-
-    if (
-      state.mapsPromise
-    ) {
-      return state
-        .mapsPromise;
-    }
-
-    const key =
-      getMapsApiKey();
-
-    if (
-      !isConfiguredMapsKey(
-        key
-      )
-    ) {
-      state.mapsPromise =
-        Promise.reject(
-          new Error(
-            "Google Maps APIキーが未設定です。"
-          )
+        renderParticipantUI();
+      } catch (error) {
+        console.error(
+          "Participant master load failed.",
+          error
         );
 
-      return state
-        .mapsPromise;
-    }
+        state.participantError = error;
+        state.participantCandidates = [];
+        state.postingParticipants = [];
 
-    state.mapsPromise =
-      new Promise(
-        (
-          resolve,
-          reject
-        ) => {
-          window
-            .__seedStudioMapsReady =
-            () => {
-              resolve(
-                window.google.maps
-              );
-            };
-
-          const script =
-            document.createElement(
-              "script"
-            );
-
-          script.src =
-            "https://maps.googleapis.com/maps/api/js" +
-            "?key=" +
-            encodeURIComponent(
-              key
-            ) +
-            "&callback=__seedStudioMapsReady" +
-            "&v=weekly";
-
-          script.async =
-            true;
-
-          script.defer =
-            true;
-
-          script.onerror =
-            () => {
-              reject(
-                new Error(
-                  "Google Mapsを読み込めませんでした。"
-                )
-              );
-            };
-
-          document.head.appendChild(
-            script
-          );
-        }
-      );
-
-    return state
-      .mapsPromise;
-  }
-
-
-  function toLatLngPath(
-    coordinates
-  ) {
-    return (
-      coordinates ||
-      []
-    ).map(
-      (
-        [
-          lng,
-          lat
-        ]
-      ) => ({
-        lat,
-        lng
-      })
-    );
-  }
-
-
-  function fitMapToCoordinates(
-    map,
-    coordinates,
-    fallbackCenter =
-      DEFAULT_CENTER
-  ) {
-    if (!map) {
-      return;
-    }
-
-    if (
-      !coordinates
-        ?.length
-    ) {
-      map.setCenter(
-        fallbackCenter
-      );
-
-      map.setZoom(
-        DEFAULT_ZOOM
-      );
-
-      return;
-    }
-
-    const bounds =
-      new google.maps
-        .LatLngBounds();
-
-    coordinates.forEach(
-      (
-        [
-          lng,
-          lat
-        ]
-      ) => {
-        bounds.extend({
-          lat,
-          lng
-        });
+        renderParticipantUI();
+      } finally {
+        state.participantLoading = false;
+        renderParticipantLoadingStates();
       }
-    );
+    },
 
-    if (
-      coordinates.length ===
-      1
-    ) {
-      map.setCenter({
-        lat:
-          coordinates[0][1],
-
-        lng:
-          coordinates[0][0]
-      });
-
-      map.setZoom(
-        17
-      );
-
-    } else {
-      map.fitBounds(
-        bounds,
-        36
-      );
-    }
-  }
-
-
-  function getGeoRecords() {
-    return dataRepository
-      .load()
-      .filter(
-        (
-          record
-        ) =>
-          record.area?.type ===
-            "Polygon" &&
-          Array.isArray(
-            record.area
-              .coordinates
-          ) &&
-          record.area
-            .coordinates
-            .length >=
-            3
-      );
-  }
-
-
-  // ============================================================
-  // Draft
-  // ============================================================
-
-  function resetDraft() {
-    state.mapPoints =
-      [];
-
-    state.draft = {
-      postingDate:
-        todayIso(),
-
-      // 田島さんを初期選択にする
-      staffId:
-        "S0006",
-
-      flyerId:
-        master
-          .flyers[0]
-          .id,
-
-      participantIds:
-        [],
-
-      area:
-        null,
-
-      quantity:
-        0,
-
-      participantSteps:
-        {}
-    };
-
-    const postingDate =
-      $("#postingDate");
-
-    const staffSelect =
-      $("#staffSelect");
-
-    const flyerSelect =
-      $("#flyerSelect");
-
-    const quantityInput =
-      $("#quantityInput");
-
-    if (
-      postingDate
-    ) {
-      postingDate.value =
-        state.draft
-          .postingDate;
-    }
-
-    if (
-      staffSelect
-    ) {
-      staffSelect.value =
-        state.draft
-          .staffId;
-    }
-
-    if (
-      flyerSelect
-    ) {
-      flyerSelect.value =
-        state.draft
-          .flyerId;
-    }
-
-    if (
-      quantityInput
-    ) {
-      quantityInput.value =
-        "";
-    }
-
-    $$(
-      "#participantList input"
-    ).forEach(
-      (
-        input
-      ) => {
-        input.checked =
-          false;
-
-        input
-          .closest(
-            ".checkbox-row"
-          )
-          ?.classList
-          .remove(
-            "is-selected"
-          );
+    async setEnabled(personId, enabled) {
+      if (!state.authState.authorized) {
+        throw new Error(
+          "Authentication required."
+        );
       }
-    );
 
-    clearDraftMapGraphics();
+      await window.SeedStudioFirestore
+        .setPostingParticipantEnabled(
+          personId,
+          enabled
+        );
+
+      await this.reload();
+    }
+  };
+
+  // ============================================================
+  // Participant UI helpers
+  // ============================================================
+
+  function phaseLabelHtml(person) {
+    const phase =
+      person.phase || "ACTIVE";
+
+    const label =
+      person.phaseLabel ||
+      (phase === "TRIAL"
+        ? "体験中"
+        : "利用中");
+
+    const style =
+      phase === "TRIAL"
+        ? "background:#FFF1D8;color:#8A6020;"
+        : "background:#E8F3EC;color:#2F6D4F;";
+
+    return `
+      <span
+        style="
+          display:inline-flex;
+          align-items:center;
+          padding:4px 8px;
+          border-radius:999px;
+          font-size:11px;
+          font-weight:700;
+          ${style}
+        "
+      >
+        ${escapeHtml(label)}
+      </span>
+    `;
   }
 
-
-  // ============================================================
-  // Navigation
-  // ============================================================
-
-  function navigate(
-    view
-  ) {
-    state.currentView =
-      view;
-
-    $$(".view")
-      .forEach(
-        (
-          element
-        ) => {
-          element
-            .classList
-            .toggle(
-              "is-active",
-              element
-                .dataset
-                .view ===
-                view
-            );
-        }
-      );
-
-    const backButton =
-      $("#backButton");
-
-    if (
-      backButton
-    ) {
-      backButton.classList.toggle(
+  function renderParticipantLoadingStates() {
+    $("#participantListLoading")
+      ?.classList.toggle(
         "is-hidden",
-        view ===
-          "home"
+        !state.participantLoading
       );
-    }
 
-    const titles = {
-      home:
-        "SeedStudio Posting",
-
-      "register-basic":
-        "配布実績を登録",
-
-      "register-map":
-        "配布実績を登録",
-
-      "register-result":
-        "配布実績を登録",
-
-      success:
-        "登録完了",
-
-      map:
-        "配布状況",
-
-      achievements:
-        "みんなの成果",
-
-      history:
-        "配布履歴"
-    };
-
-    const pageTitle =
-      $("#pageTitle");
-
-    if (
-      pageTitle
-    ) {
-      pageTitle.textContent =
-        titles[view] ||
-        "SeedStudio Posting";
-    }
-
-    if (
-      view ===
-      "home"
-    ) {
-      renderHome();
-    }
-
-    if (
-      view ===
-      "register-map"
-    ) {
-      window.setTimeout(
-        initPostingMap,
-        0
+    $("#postingParticipantCurrentLoading")
+      ?.classList.toggle(
+        "is-hidden",
+        !state.participantLoading
       );
-    }
 
-    if (
-      view ===
-      "register-result"
-    ) {
-      renderResultStep();
-    }
-
-    if (
-      view ===
-      "success"
-    ) {
-      renderSuccess();
-    }
-
-    if (
-      view ===
-      "achievements"
-    ) {
-      renderAchievements();
-    }
-
-    if (
-      view ===
-      "history"
-    ) {
-      renderHistory();
-    }
-
-    if (
-      view ===
-      "map"
-    ) {
-      window.setTimeout(
-        renderMapStatus,
-        0
+    $("#postingParticipantCandidateLoading")
+      ?.classList.toggle(
+        "is-hidden",
+        !state.participantLoading
       );
-    }
-
-    window.scrollTo(
-      0,
-      0
-    );
   }
 
+  function renderParticipantList() {
+    const list = $("#participantList");
+    const empty = $("#participantListEmpty");
 
-  function goBack() {
-    const fallback = {
-      "register-basic":
-        "home",
+    if (!list) {
+      return;
+    }
 
-      "register-map":
-        "register-basic",
+    if (
+      state.participantError ||
+      state.participantLoading
+    ) {
+      list.innerHTML = "";
+      empty?.classList.add("is-hidden");
+      return;
+    }
 
-      "register-result":
-        "register-map",
+    const selectedIds =
+      new Set(
+        state.draft.participantIds ||
+        []
+      );
 
-      success:
-        "home",
+    const participants =
+      [...state.postingParticipants].sort(
+        (a, b) =>
+          String(a.name || "").localeCompare(
+            String(b.name || ""),
+            "ja"
+          )
+      );
 
-      map:
-        "home",
-
-      achievements:
-        "home",
-
-      history:
-        "home"
-    };
-
-    navigate(
-      fallback[
-        state.currentView
-      ] ||
-      "home"
-    );
-  }
-
-
-  // ============================================================
-  // Masters
-  // ============================================================
-
-  function renderMasters() {
-    $("#staffSelect")
-      .innerHTML =
-      master.staff
+    list.innerHTML =
+      participants
         .map(
-          (
-            item
-          ) =>
-            `<option value="${item.id}">${item.name}</option>`
-        )
-        .join(
-          ""
-        );
-
-
-    $("#flyerSelect")
-      .innerHTML =
-      master.flyers
-        .map(
-          (
-            item
-          ) =>
-            `<option value="${item.id}">${item.name}</option>`
-        )
-        .join(
-          ""
-        );
-
-
-    $("#participantList")
-      .innerHTML =
-      master.participants
-        .map(
-          (
-            item
-          ) => `
-            <label class="checkbox-row">
+          (person) => `
+            <label class="checkbox-row ${
+              selectedIds.has(person.personId)
+                ? "is-selected"
+                : ""
+            }">
               <input
                 type="checkbox"
-                value="${item.id}"
+                value="${escapeHtml(
+                  person.personId
+                )}"
+                ${
+                  selectedIds.has(person.personId)
+                    ? "checked"
+                    : ""
+                }
               >
-              <span>
-                ${item.name}
+              <span
+                style="
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:10px;
+                  width:100%;
+                "
+              >
+                <span>
+                  ${escapeHtml(person.name)}
+                </span>
+
+                ${phaseLabelHtml(person)}
               </span>
             </label>
           `
         )
-        .join(
-          ""
-        );
-
-
-    $("#achievementParticipantSelect")
-      .innerHTML =
-      master.participants
-        .map(
-          (
-            item
-          ) =>
-            `<option value="${item.id}">${item.name}</option>`
-        )
-        .join(
-          ""
-        );
-  }
-
-
-  // ============================================================
-  // Home
-  // ============================================================
-
-  function renderHome() {
-    const ym =
-      currentYm();
-
-    const records =
-      dataRepository
-        .load()
-        .filter(
-          (
-            record
-          ) =>
-            (
-              record.postingDate ||
-              ""
-            ).startsWith(
-              ym
-            )
-        );
-
-    const quantity =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          Number(
-            record.quantity ||
-            0
-          ),
-        0
-      );
-
-    const steps =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          (
-            record.participants ||
-            []
-          ).reduce(
-            (
-              participantTotal,
-              participant
-            ) =>
-              participantTotal +
-              Number(
-                participant.steps ||
-                0
-              ),
-            0
-          ),
-        0
-      );
-
-    const participations =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          (
-            record.participants ||
-            []
-          ).length,
-        0
-      );
-
-    $("#summaryMonth")
-      .textContent =
-      `${Number(
-        ym.slice(
-          5,
-          7
-        )
-      )}月`;
-
-    $("#homeTotalQuantity")
-      .textContent =
-      `${formatNumber(
-        quantity
-      )}部`;
-
-    $("#homeTotalSteps")
-      .textContent =
-      `${formatNumber(
-        steps
-      )}歩`;
-
-    $("#homeParticipationCount")
-      .textContent =
-      `${formatNumber(
-        participations
-      )}回`;
-  }
-
-
-  // ============================================================
-  // Step 1
-  // ============================================================
-
-  function syncStep1() {
-    state.draft.postingDate =
-      $("#postingDate")
-        .value;
-
-    state.draft.staffId =
-      $("#staffSelect")
-        .value;
-
-    state.draft.flyerId =
-      $("#flyerSelect")
-        .value;
-
-    state.draft
-      .participantIds =
-      $$(
-        "#participantList input:checked"
-      ).map(
-        (
-          input
-        ) =>
-          input.value
-      );
-  }
-
-
-  function validateStep1() {
-    syncStep1();
-
-    const ok =
-      state.draft
-        .participantIds
-        .length >
-      0;
-
-    $("#participantError")
-      .classList
-      .toggle(
-        "is-hidden",
-        ok
-      );
-
-    return ok;
-  }
-
-
-  // ============================================================
-  // Posting map
-  // ============================================================
-
-  function clearDraftMapGraphics() {
-    state
-      .postingMarkers
-      .forEach(
-        (
-          marker
-        ) =>
-          marker.setMap(
-            null
-          )
-      );
-
-    state.postingMarkers =
-      [];
-
-    if (
-      state.postingPolygon
-    ) {
-      state
-        .postingPolygon
-        .setMap(
-          null
-        );
-
-      state.postingPolygon =
-        null;
-    }
-
-    const confirmButton =
-      $("#confirmMapButton");
-
-    if (
-      confirmButton
-    ) {
-      confirmButton.disabled =
-        true;
-    }
-
-    const warning =
-      $("#overlapWarning");
-
-    if (
-      warning
-    ) {
-      warning.classList.add(
-        "is-hidden"
-      );
-    }
-  }
-
-
-  function drawDraftPolygon() {
-    if (
-      !state.postingMap ||
-      !window.google?.maps
-    ) {
-      return;
-    }
-
-    state
-      .postingMarkers
-      .forEach(
-        (
-          marker
-        ) =>
-          marker.setMap(
-            null
-          )
-      );
-
-    state.postingMarkers =
-      [];
-
-    if (
-      state.postingPolygon
-    ) {
-      state
-        .postingPolygon
-        .setMap(
-          null
-        );
-    }
-
-    const path =
-      toLatLngPath(
-        state.mapPoints
-      );
-
-    if (
-      path.length >=
-      2
-    ) {
-      state.postingPolygon =
-        new google.maps
-          .Polygon({
-            paths:
-              path,
-
-            strokeColor:
-              "#2F6D4F",
-
-            strokeOpacity:
-              1,
-
-            strokeWeight:
-              3,
-
-            fillColor:
-              "#2F6D4F",
-
-            fillOpacity:
-              path.length >=
-              3
-                ? 0.22
-                : 0.08,
-
-            map:
-              state.postingMap,
-
-            clickable:
-              false
-          });
-
-    } else {
-      state.postingPolygon =
-        null;
-    }
-
-    path.forEach(
-      (
-        position,
-        index
-      ) => {
-        const marker =
-          new google.maps
-            .Marker({
-              position,
-
-              map:
-                state.postingMap,
-
-              label: {
-                text:
-                  String(
-                    index +
-                    1
-                  ),
-
-                color:
-                  "#ffffff",
-
-                fontWeight:
-                  "700"
-              },
-
-              title:
-                `頂点 ${
-                  index +
-                  1
-                }`
-            });
-
-        state
-          .postingMarkers
-          .push(
-            marker
-          );
-      }
-    );
-
-    $("#confirmMapButton")
-      .disabled =
-      state.mapPoints
-        .length <
-      3;
-
-    updateOverlapWarning();
-  }
-
-
-  function renderPostingHistoryPolygons() {
-    state
-      .postingHistoryPolygons
-      .forEach(
-        (
-          polygon
-        ) =>
-          polygon.setMap(
-            null
-          )
-      );
-
-    state.postingHistoryPolygons =
-      [];
-
-    if (
-      !state.postingMap ||
-      !window.google?.maps
-    ) {
-      return;
-    }
-
-    getGeoRecords()
-      .forEach(
-        (
-          record,
-          index
-        ) => {
-          const opacity =
-            Math.max(
-              0.08,
-              0.18 -
-              index *
-                0.01
-            );
-
-          const polygon =
-            new google.maps
-              .Polygon({
-                paths:
-                  toLatLngPath(
-                    record
-                      .area
-                      .coordinates
-                  ),
-
-                strokeColor:
-                  "#6F7F72",
-
-                strokeOpacity:
-                  0.55,
-
-                strokeWeight:
-                  2,
-
-                fillColor:
-                  "#8BA294",
-
-                fillOpacity:
-                  opacity,
-
-                map:
-                  state.postingMap,
-
-                clickable:
-                  false
-              });
-
-          state
-            .postingHistoryPolygons
-            .push(
-              polygon
-            );
-        }
-      );
-  }
-
-
-  async function initPostingMap() {
-    const statusId =
-      "#postingMapStatus";
-
-    try {
-      setMapStatus(
-        statusId,
-        "Google Mapsを読み込み中…"
-      );
-
-      await loadGoogleMaps();
-
-      if (
-        !state.postingMap
-      ) {
-        state.postingMap =
-          new google.maps
-            .Map(
-              $("#postingGoogleMap"),
-              {
-                center:
-                  DEFAULT_CENTER,
-
-                zoom:
-                  DEFAULT_ZOOM,
-
-                mapTypeControl:
-                  false,
-
-                streetViewControl:
-                  false,
-
-                fullscreenControl:
-                  false,
-
-                clickableIcons:
-                  false,
-
-                gestureHandling:
-                  "greedy"
-              }
-            );
-
-        state.postingMap
-          .addListener(
-            "click",
-            (
-              event
-            ) => {
-              state.mapPoints
-                .push([
-                  event.latLng.lng(),
-                  event.latLng.lat()
-                ]);
-
-              drawDraftPolygon();
-            }
-          );
-      }
-
-      renderPostingHistoryPolygons();
-
-      drawDraftPolygon();
-
-      hideMapStatus(
-        statusId
-      );
-
-      if (
-        !state.mapPoints
-          .length
-      ) {
-        locateCurrentPosition(
-          false
-        );
-
-      } else {
-        fitMapToCoordinates(
-          state.postingMap,
-          state.mapPoints
-        );
-      }
-
-      window.setTimeout(
-        () =>
-          google.maps.event
-            .trigger(
-              state.postingMap,
-              "resize"
-            ),
-        50
-      );
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Posting map error.",
-        error
-      );
-
-      setMapStatus(
-        statusId,
-        "Google Mapsを表示できませんでした。",
-        true
-      );
-
-      $("#confirmMapButton")
-        .disabled =
-        true;
-    }
-  }
-
-
-  function locateCurrentPosition(
-    showError =
-      true
-  ) {
-    if (
-      !navigator.geolocation ||
-      !state.postingMap
-    ) {
-      if (
-        showError
-      ) {
-        alert(
-          "この端末では現在地を取得できません。"
-        );
-      }
-
-      return;
-    }
-
-    const button =
-      $("#locateButton");
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      "取得中…";
-
-    navigator.geolocation
-      .getCurrentPosition(
-        (
-          position
-        ) => {
-          state.postingMap
-            .setCenter({
-              lat:
-                position
-                  .coords
-                  .latitude,
-
-              lng:
-                position
-                  .coords
-                  .longitude
-            });
-
-          state.postingMap
-            .setZoom(
-              17
-            );
-
-          button.disabled =
-            false;
-
-          button.textContent =
-            "◎ 現在地へ";
-        },
-
-        () => {
-          button.disabled =
-            false;
-
-          button.textContent =
-            "◎ 現在地へ";
-
-          if (
-            showError
-          ) {
-            alert(
-              "現在地を取得できませんでした。位置情報の許可を確認してください。"
-            );
-          }
-        },
-
-        {
-          enableHighAccuracy:
-            true,
-
-          timeout:
-            8000,
-
-          maximumAge:
-            60000
-        }
-      );
-  }
-
-
-  // ============================================================
-  // Polygon overlap
-  // ============================================================
-
-  function pointInPolygon(
-    point,
-    polygon
-  ) {
-    const [
-      x,
-      y
-    ] =
-      point;
-
-    let inside =
-      false;
-
-    for (
-      let i =
-          0,
-        j =
-          polygon.length -
-          1;
-
-      i <
-      polygon.length;
-
-      j =
-        i++
-    ) {
-      const [
-        xi,
-        yi
-      ] =
-        polygon[i];
-
-      const [
-        xj,
-        yj
-      ] =
-        polygon[j];
-
-      const intersects =
-        (
-          (
-            yi >
-            y
-          ) !==
-          (
-            yj >
-            y
-          )
-        ) &&
-        (
-          x <
-          (
-            (
-              xj -
-              xi
-            ) *
-            (
-              y -
-              yi
-            )
-          ) /
-          (
-            (
-              yj -
-              yi
-            ) ||
-            Number.EPSILON
-          ) +
-          xi
-        );
-
-      if (
-        intersects
-      ) {
-        inside =
-          !inside;
-      }
-    }
-
-    return inside;
-  }
-
-
-  function orientation(
-    a,
-    b,
-    c
-  ) {
-    const value =
-      (
-        b[1] -
-        a[1]
-      ) *
-      (
-        c[0] -
-        b[0]
-      ) -
-      (
-        b[0] -
-        a[0]
-      ) *
-      (
-        c[1] -
-        b[1]
-      );
-
-    if (
-      Math.abs(
-        value
-      ) <
-      1e-12
-    ) {
-      return 0;
-    }
-
-    return value >
-      0
-      ? 1
-      : 2;
-  }
-
-
-  function segmentsIntersect(
-    p1,
-    q1,
-    p2,
-    q2
-  ) {
-    const o1 =
-      orientation(
-        p1,
-        q1,
-        p2
-      );
-
-    const o2 =
-      orientation(
-        p1,
-        q1,
-        q2
-      );
-
-    const o3 =
-      orientation(
-        p2,
-        q2,
-        p1
-      );
-
-    const o4 =
-      orientation(
-        p2,
-        q2,
-        q1
-      );
-
-    return (
-      o1 !==
-        o2 &&
-      o3 !==
-        o4
+        .join("");
+
+    empty?.classList.toggle(
+      "is-hidden",
+      participants.length > 0
     );
   }
 
+  function renderParticipantManagerCurrent() {
+    const list =
+      $("#postingParticipantCurrentList");
 
-  function polygonsOverlap(
-    a,
-    b
-  ) {
-    if (
-      a.some(
-        (
-          point
-        ) =>
-          pointInPolygon(
-            point,
-            b
+    const empty =
+      $("#postingParticipantCurrentEmpty");
+
+    const count =
+      $("#postingParticipantCount");
+
+    if (!list) {
+      return;
+    }
+
+    const participants =
+      [...state.postingParticipants].sort(
+        (a, b) =>
+          String(a.name || "").localeCompare(
+            String(b.name || ""),
+            "ja"
           )
-      ) ||
-      b.some(
-        (
-          point
-        ) =>
-          pointInPolygon(
-            point,
-            a
-          )
-      )
-    ) {
-      return true;
-    }
-
-    for (
-      let i =
-        0;
-      i <
-      a.length;
-      i++
-    ) {
-      const a1 =
-        a[i];
-
-      const a2 =
-        a[
-          (
-            i +
-            1
-          ) %
-          a.length
-        ];
-
-      for (
-        let j =
-          0;
-        j <
-        b.length;
-        j++
-      ) {
-        const b1 =
-          b[j];
-
-        const b2 =
-          b[
-            (
-              j +
-              1
-            ) %
-            b.length
-          ];
-
-        if (
-          segmentsIntersect(
-            a1,
-            a2,
-            b1,
-            b2
-          )
-        ) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-
-  function updateOverlapWarning() {
-    const warning =
-      $("#overlapWarning");
-
-    if (
-      state.mapPoints
-        .length <
-      3
-    ) {
-      warning.classList.add(
-        "is-hidden"
       );
 
-      return;
+    if (count) {
+      count.textContent =
+        `${participants.length}名`;
     }
 
-    const overlapped =
-      getGeoRecords()
-        .find(
-          (
-            record
-          ) =>
-            polygonsOverlap(
-              state.mapPoints,
-              record
-                .area
-                .coordinates
-            )
-        );
-
-    if (
-      overlapped
-    ) {
-      warning.innerHTML =
-        `⚠ この範囲は過去の配布履歴と重なっています` +
-        `<br>` +
-        `<small>` +
-        `${overlapped.postingDate}・` +
-        `${formatNumber(
-          overlapped.quantity
-        )}部` +
-        `</small>`;
-
-      warning.classList.remove(
-        "is-hidden"
-      );
-
-    } else {
-      warning.classList.add(
-        "is-hidden"
-      );
-    }
-  }
-
-
-  // ============================================================
-  // Step 3
-  // ============================================================
-
-  function renderResultStep() {
-    $("#participantSteps")
-      .innerHTML =
-      state.draft
-        .participantIds
+    list.innerHTML =
+      participants
         .map(
-          (
-            id
-          ) => `
-            <div class="participant-step-card">
-              <strong>
-                ${names.participant(id)}
-              </strong>
-
-              <div class="number-input">
-                <input
-                  class="input js-step-input"
-                  type="number"
-                  min="1"
-                  inputmode="numeric"
-                  placeholder="歩数"
-                  data-id="${id}"
-                  value="${
-                    state.draft
-                      .participantSteps[
-                        id
-                      ] ||
-                    ""
-                  }"
-                >
-
-                <span>
-                  歩
-                </span>
-              </div>
-            </div>
-          `
-        )
-        .join(
-          ""
-        );
-
-    $$(".js-step-input")
-      .forEach(
-        (
-          input
-        ) => {
-          input.addEventListener(
-            "input",
-            () => {
-              state.draft
-                .participantSteps[
-                  input
-                    .dataset
-                    .id
-                ] =
-                Number(
-                  input.value ||
-                  0
-                );
-
-              renderConfirm();
-            }
-          );
-        }
-      );
-
-    $("#quantityInput")
-      .value =
-      state.draft
-        .quantity ||
-      "";
-
-    renderConfirm();
-  }
-
-
-  function renderConfirm() {
-    state.draft.quantity =
-      Number(
-        $("#quantityInput")
-          .value ||
-        0
-      );
-
-    const steps =
-      state.draft
-        .participantIds
-        .map(
-          (
-            id
-          ) =>
-            `${names.participant(id)} ` +
-            `${formatNumber(
-              state.draft
-                .participantSteps[
-                  id
-                ] ||
-              0
-            )}歩`
-        )
-        .join(
-          "<br>"
-        );
-
-    $("#confirmContent")
-      .innerHTML =
-      `
-        <div class="confirm-row">
-          <span>配布日</span>
-          <b>
-            ${state.draft.postingDate}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>担当職員</span>
-          <b>
-            ${names.staff(
-              state.draft.staffId
-            )}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>参加利用者</span>
-          <b>
-            ${
-              state.draft
-                .participantIds
-                .map(
-                  names.participant
-                )
-                .join(
-                  "・"
-                )
-            }
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>チラシ</span>
-          <b>
-            ${names.flyer(
-              state.draft.flyerId
-            )}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>配布部数</span>
-          <b>
-            ${formatNumber(
-              state.draft.quantity
-            )}部
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>歩数</span>
-          <b>
-            ${steps}
-          </b>
-        </div>
-      `;
-
-    window.setTimeout(
-      renderConfirmMapPreview,
-      0
-    );
-  }
-
-
-  async function renderConfirmMapPreview() {
-    if (
-      !state.draft.area
-        ?.coordinates
-        ?.length
-    ) {
-      return;
-    }
-
-    try {
-      await loadGoogleMaps();
-
-      if (
-        !state.confirmMap
-      ) {
-        state.confirmMap =
-          new google.maps
-            .Map(
-              $("#confirmGoogleMap"),
-              {
-                center:
-                  DEFAULT_CENTER,
-
-                zoom:
-                  DEFAULT_ZOOM,
-
-                disableDefaultUI:
-                  true,
-
-                gestureHandling:
-                  "none",
-
-                clickableIcons:
-                  false
-              }
-            );
-      }
-
-      if (
-        state.confirmPolygon
-      ) {
-        state
-          .confirmPolygon
-          .setMap(
-            null
-          );
-      }
-
-      state.confirmPolygon =
-        new google.maps
-          .Polygon({
-            paths:
-              toLatLngPath(
-                state.draft
-                  .area
-                  .coordinates
-              ),
-
-            strokeColor:
-              "#2F6D4F",
-
-            strokeOpacity:
-              1,
-
-            strokeWeight:
-              2,
-
-            fillColor:
-              "#2F6D4F",
-
-            fillOpacity:
-              0.22,
-
-            map:
-              state.confirmMap,
-
-            clickable:
-              false
-          });
-
-      fitMapToCoordinates(
-        state.confirmMap,
-        state.draft
-          .area
-          .coordinates
-      );
-
-      window.setTimeout(
-        () =>
-          google.maps.event
-            .trigger(
-              state.confirmMap,
-              "resize"
-            ),
-        50
-      );
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Confirm map error.",
-        error
-      );
-    }
-  }
-
-
-  // ============================================================
-  // Save
-  // ============================================================
-
-  async function saveRecord() {
-    const saveButton =
-      $("#saveRecordButton");
-
-    if (
-      saveButton.disabled
-    ) {
-      return;
-    }
-
-    saveButton.disabled =
-      true;
-
-    saveButton.textContent =
-      "保存しています…";
-
-    state.draft.quantity =
-      Number(
-        $("#quantityInput")
-          .value ||
-        0
-      );
-
-    const validQuantity =
-      state.draft.quantity >
-      0;
-
-    const validSteps =
-      state.draft
-        .participantIds
-        .every(
-          (
-            id
-          ) =>
-            Number(
-              state.draft
-                .participantSteps[
-                  id
-                ] ||
-              0
-            ) >
-            0
-        );
-
-    if (
-      !validQuantity ||
-      !validSteps
-    ) {
-      alert(
-        "配布部数と参加した人全員の歩数を入力してください。"
-      );
-
-      saveButton.disabled =
-        false;
-
-      saveButton.textContent =
-        "この内容で登録する";
-
-      return;
-    }
-
-    const record = {
-      id:
-        "P-" +
-        Date.now(),
-
-      postingDate:
-        state.draft
-          .postingDate,
-
-      staffId:
-        state.draft
-          .staffId,
-
-      flyerId:
-        state.draft
-          .flyerId,
-
-      quantity:
-        state.draft
-          .quantity,
-
-      participants:
-        state.draft
-          .participantIds
-          .map(
-            (
-              id
-            ) => ({
-              participantId:
-                id,
-
-              steps:
-                Number(
-                  state.draft
-                    .participantSteps[
-                      id
-                    ]
-                )
-            })
-          ),
-
-      area:
-        state.draft.area,
-
-      createdAt:
-        new Date()
-          .toISOString()
-    };
-
-    try {
-      const result =
-        await dataRepository
-          .add(
-            record
-          );
-
-      result.record
-        .storageMode =
-        result.mode;
-
-      state.lastSavedRecord =
-        result.record;
-
-      navigate(
-        "success"
-      );
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Save failed.",
-        error
-      );
-
-      if (
-        error.message ===
-        "LOGIN_REQUIRED"
-      ) {
-        alert(
-          "Googleログインが必要です。"
-        );
-
-      } else {
-        alert(
-          "保存中にエラーが発生しました。"
-        );
-      }
-    }
-
-    saveButton.disabled =
-      false;
-
-    saveButton.textContent =
-      "この内容で登録する";
-  }
-
-
-  // ============================================================
-  // Success
-  // ============================================================
-
-  function renderSuccess() {
-    const record =
-      state.lastSavedRecord;
-
-    if (
-      !record
-    ) {
-      return;
-    }
-
-    $("#successQuantity")
-      .textContent =
-      `${formatNumber(
-        record.quantity
-      )}部`;
-
-    const savedAt =
-      new Date(
-        record.createdAt
-      );
-
-    const savedAtText =
-      Number.isNaN(
-        savedAt.getTime()
-      )
-        ? ""
-        : savedAt
-            .toLocaleString(
-              "ja-JP",
-              {
-                year:
-                  "numeric",
-
-                month:
-                  "numeric",
-
-                day:
-                  "numeric",
-
-                hour:
-                  "2-digit",
-
-                minute:
-                  "2-digit"
-              }
-            );
-
-    $("#successMeta")
-      .innerHTML =
-      `
-        <div class="confirm-row">
-          <span>保存状態</span>
-          <b>✓ 保存済み</b>
-        </div>
-
-        <div class="confirm-row">
-          <span>保存先</span>
-          <b>
-            ${
-              record.storageMode ===
-              "firestore"
-                ? "Firestore（共有）"
-                : "この端末（一時保存）"
-            }
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>配布日</span>
-          <b>
-            ${record.postingDate}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>担当職員</span>
-          <b>
-            ${names.staff(
-              record.staffId
-            )}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>チラシ</span>
-          <b>
-            ${names.flyer(
-              record.flyerId
-            )}
-          </b>
-        </div>
-
-        <div class="confirm-row">
-          <span>保存日時</span>
-          <b>
-            ${savedAtText}
-          </b>
-        </div>
-      `;
-
-    $("#successParticipants")
-      .innerHTML =
-      (
-        record.participants ||
-        []
-      )
-        .map(
-          (
-            participant
-          ) =>
-            `
-              <div class="participant-result">
-                ${names.participant(
-                  participant
-                    .participantId
-                )}
-
-                <b>
-                  🚶
-                  ${formatNumber(
-                    participant.steps
-                  )}歩
-                </b>
-              </div>
-            `
-        )
-        .join(
-          ""
-        );
-  }
-
-
-  // ============================================================
-  // History
-  // ============================================================
-
-  function renderHistory() {
-    const records =
-      dataRepository
-        .load()
-        .sort(
-          (
-            a,
-            b
-          ) =>
-            (
-              b.postingDate ||
-              ""
-            ).localeCompare(
-              a.postingDate ||
-              ""
-            )
-        );
-
-    $("#historyEmpty")
-      .classList
-      .toggle(
-        "is-hidden",
-        records.length >
-        0
-      );
-
-    $("#historyList")
-      .innerHTML =
-      records
-        .map(
-          (
-            record
-          ) => `
-            <article class="history-item">
-              <b>
-                ${record.postingDate}
-                　
-                ${formatNumber(
-                  record.quantity
-                )}部
-              </b>
-
-              <small>
-                ${names.staff(
-                  record.staffId
-                )}
-                <br>
-
-                ${
-                  (
-                    record.participants ||
-                    []
-                  )
-                    .map(
-                      (
-                        participant
-                      ) =>
-                        names.participant(
-                          participant
-                            .participantId
-                        )
-                    )
-                    .join(
-                      "・"
-                    )
-                }
-
-                <br>
-
-                ${names.flyer(
-                  record.flyerId
-                )}
-              </small>
-            </article>
-          `
-        )
-        .join(
-          ""
-        );
-  }
-
-
-  // ============================================================
-  // Distribution status
-  // ============================================================
-
-  async function renderMapStatus() {
-    const records =
-      dataRepository.load();
-
-    $("#mapStatusList")
-      .innerHTML =
-      records
-        .map(
-          (
-            record
-          ) => `
-            <article class="history-item">
-              <b>
-                ${record.postingDate}
-                　
-                ${formatNumber(
-                  record.quantity
-                )}部
-              </b>
-
-              <small>
-                ${names.flyer(
-                  record.flyerId
-                )}
-              </small>
-            </article>
-          `
-        )
-        .join(
-          ""
-        );
-
-    const statusId =
-      "#historyMapStatus";
-
-    try {
-      setMapStatus(
-        statusId,
-        "Google Mapsを読み込み中…"
-      );
-
-      await loadGoogleMaps();
-
-      if (
-        !state.historyMap
-      ) {
-        state.historyMap =
-          new google.maps
-            .Map(
-              $("#historyGoogleMap"),
-              {
-                center:
-                  DEFAULT_CENTER,
-
-                zoom:
-                  DEFAULT_ZOOM,
-
-                mapTypeControl:
-                  false,
-
-                streetViewControl:
-                  false,
-
-                fullscreenControl:
-                  false,
-
-                clickableIcons:
-                  false
-              }
-            );
-      }
-
-      state
-        .historyPolygons
-        .forEach(
-          (
-            polygon
-          ) =>
-            polygon.setMap(
-              null
-            )
-        );
-
-      state.historyPolygons =
-        [];
-
-      const geoRecords =
-        getGeoRecords();
-
-      const allCoordinates =
-        [];
-
-      geoRecords.forEach(
-        (
-          record,
-          index
-        ) => {
-          allCoordinates.push(
-            ...record
-              .area
-              .coordinates
-          );
-
-          const opacity =
-            Math.max(
-              0.08,
-              0.24 -
-              index *
-                0.015
-            );
-
-          const polygon =
-            new google.maps
-              .Polygon({
-                paths:
-                  toLatLngPath(
-                    record
-                      .area
-                      .coordinates
-                  ),
-
-                strokeColor:
-                  "#2F6D4F",
-
-                strokeOpacity:
-                  0.85,
-
-                strokeWeight:
-                  2,
-
-                fillColor:
-                  "#2F6D4F",
-
-                fillOpacity:
-                  opacity,
-
-                map:
-                  state.historyMap,
-
-                clickable:
-                  false
-              });
-
-          state
-            .historyPolygons
-            .push(
-              polygon
-            );
-        }
-      );
-
-      if (
-        allCoordinates.length
-      ) {
-        fitMapToCoordinates(
-          state.historyMap,
-          allCoordinates
-        );
-      }
-
-      hideMapStatus(
-        statusId
-      );
-
-      window.setTimeout(
-        () =>
-          google.maps.event
-            .trigger(
-              state.historyMap,
-              "resize"
-            ),
-        50
-      );
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "History map error.",
-        error
-      );
-
-      setMapStatus(
-        statusId,
-        "Google Mapsを表示できませんでした。",
-        true
-      );
-    }
-  }
-
-
-  // ============================================================
-  // Achievements
-  // ============================================================
-
-  function renderAchievements() {
-    const participantId =
-      $("#achievementParticipantSelect")
-        .value ||
-      master
-        .participants[0]
-        .id;
-
-    const ym =
-      currentYm();
-
-    const records =
-      dataRepository
-        .load()
-        .filter(
-          (
-            record
-          ) =>
-            (
-              record.participants ||
-              []
-            ).some(
-              (
-                participant
-              ) =>
-                participant
-                  .participantId ===
-                participantId
-            )
-        );
-
-    const totalSteps =
-      records.reduce(
-        (
-          total,
-          record
-        ) => {
-          const participant =
-            (
-              record.participants ||
-              []
-            ).find(
-              (
-                item
-              ) =>
-                item
-                  .participantId ===
-                participantId
-            );
-
-          return (
-            total +
-            Number(
-              participant
-                ?.steps ||
-              0
-            )
-          );
-        },
-        0
-      );
-
-    const monthSteps =
-      records
-        .filter(
-          (
-            record
-          ) =>
-            (
-              record.postingDate ||
-              ""
-            ).startsWith(
-              ym
-            )
-        )
-        .reduce(
-          (
-            total,
-            record
-          ) => {
-            const participant =
-              (
-                record.participants ||
-                []
-              ).find(
-                (
-                  item
-                ) =>
-                  item
-                    .participantId ===
-                  participantId
-              );
-
-            return (
-              total +
-              Number(
-                participant
-                  ?.steps ||
-                0
-              )
-            );
-          },
-          0
-        );
-
-    const totalQuantity =
-      records.reduce(
-        (
-          total,
-          record
-        ) =>
-          total +
-          Number(
-            record.quantity ||
-            0
-          ),
-        0
-      );
-
-    const best =
-      Math.max(
-        0,
-        ...records.map(
-          (
-            record
-          ) =>
-            Number(
-              (
-                record.participants ||
-                []
-              ).find(
-                (
-                  participant
-                ) =>
-                  participant
-                    .participantId ===
-                  participantId
-              )?.steps ||
-              0
-            )
-        )
-      );
-
-    const nextGoal =
-      milestoneSteps.find(
-        (
-          goal
-        ) =>
-          goal >
-          totalSteps
-      ) ||
-      milestoneSteps[
-        milestoneSteps.length -
-        1
-      ];
-
-    const previousGoal =
-      [
-        ...milestoneSteps
-      ]
-        .reverse()
-        .find(
-          (
-            goal
-          ) =>
-            goal <=
-            totalSteps
-        ) ||
-      0;
-
-    const progress =
-      Math.min(
-        100,
-        Math.max(
-          0,
-          (
-            (
-              totalSteps -
-              previousGoal
-            ) /
-            Math.max(
-              1,
-              nextGoal -
-              previousGoal
-            )
-          ) *
-          100
-        )
-      );
-
-    const remaining =
-      Math.max(
-        0,
-        nextGoal -
-        totalSteps
-      );
-
-    $("#achievementMonthSteps")
-      .textContent =
-      formatNumber(
-        monthSteps
-      );
-
-    $("#achievementTotalSteps")
-      .textContent =
-      `${formatNumber(
-        totalSteps
-      )}歩`;
-
-    $("#achievementCount")
-      .textContent =
-      `${records.length}回`;
-
-    $("#achievementQuantity")
-      .textContent =
-      `${formatNumber(
-        totalQuantity
-      )}部`;
-
-    $("#achievementBest")
-      .textContent =
-      `${formatNumber(
-        best
-      )}歩`;
-
-    $("#achievementGoalMessage")
-      .textContent =
-      `🌳 ${formatNumber(
-        nextGoal
-      )}歩まであと${formatNumber(
-        remaining
-      )}歩！`;
-
-    $("#achievementProgressFill")
-      .style.width =
-      `${progress}%`;
-
-    $("#achievementPercent")
-      .textContent =
-      `${Math.round(
-        progress
-      )}%`;
-
-    $("#milestoneRow")
-      .innerHTML =
-      milestoneSteps
-        .map(
-          (
-            goal
-          ) => `
+          (person) => `
             <div
-              class="
-                milestone
-                ${
-                  totalSteps >=
-                  goal
-                    ? "is-achieved"
-                    : "is-locked"
-                }
+              class="checkbox-row"
+              style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:10px;
               "
             >
-              <div>
-                ${
-                  totalSteps >=
-                  goal
-                    ? "🌱"
-                    : "○"
-                }
-              </div>
+              <span
+                style="
+                  min-width:0;
+                  flex:1;
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:8px;
+                "
+              >
+                <span>
+                  ${escapeHtml(person.name)}
+                </span>
 
-              <div>
-                ${formatNumber(
-                  goal
-                )}歩
-              </div>
+                ${phaseLabelHtml(person)}
+              </span>
+
+              <button
+                class="button button--secondary js-remove-posting-participant"
+                type="button"
+                data-person-id="${escapeHtml(
+                  person.personId
+                )}"
+                style="
+                  flex:none;
+                  width:auto;
+                  padding:8px 10px;
+                  margin:0;
+                  font-size:12px;
+                "
+              >
+                非表示
+              </button>
             </div>
           `
         )
-        .join(
-          ""
-        );
-  }
+        .join("");
 
-
-  // ============================================================
-  // Authentication actions
-  // ============================================================
-
-  async function handleLogin() {
-    try {
-      if (
-        !window.SeedStudioAuth
-      ) {
-        throw new Error(
-          "Firebase Auth is not ready."
-        );
-      }
-
-      const authState =
-        await window
-          .SeedStudioAuth
-          .signIn();
-
-      state.authState =
-        authState;
-
-      renderAuthState();
-
-      if (
-        !authState.authorized
-      ) {
-        alert(
-          "Googleログインはできましたが、このアカウントはSeedStudio職員として登録されていません。"
-        );
-
-        return;
-      }
-
-      try {
-        await dataRepository
-          .reloadFromFirestore();
-
-        renderHome();
-
-        alert(
-          "Googleログインが完了しました。"
-        );
-
-      } catch (
-        error
-      ) {
-        console.error(
-          "Firestore read failed.",
-          error
-        );
-
-        alert(
-          "Googleログインは成功しました。Firestoreの読み取り権限を確認してください。"
-        );
-      }
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Login failed.",
-        error
-      );
-
-      alert(
-        "Googleログインを完了できませんでした。"
-      );
-    }
-  }
-
-
-  async function handleLogout() {
-    try {
-      if (
-        window.SeedStudioAuth
-      ) {
-        await window
-          .SeedStudioAuth
-          .signOut();
-      }
-
-    } catch (
-      error
-    ) {
-      console.error(
-        "Logout failed.",
-        error
-      );
-    }
-
-    state.authState = {
-      signedIn:
-        false,
-
-      authorized:
-        false,
-
-      user:
-        null,
-
-      staff:
-        null
-    };
-
-    dataRepository.mode =
-      "auth-required";
-
-    dataRepository.cache =
-      dataRepository
-        .loadLocal();
-
-    renderAuthState();
-
-    renderHome();
-
-    navigate(
-      "home"
+    empty?.classList.toggle(
+      "is-hidden",
+      participants.length > 0
     );
   }
 
+  function renderParticipantManagerCandidates() {
+    const list =
+      $("#postingParticipantCandidateList");
 
-  // ============================================================
-  // Events
-  // ============================================================
+    const empty =
+      $("#postingParticipantCandidateEmpty");
 
-  function bindEvents() {
-    const loginButton =
-      $("#googleLoginButton");
+    const error =
+      $("#postingParticipantCandidateError");
 
-    if (
-      loginButton
-    ) {
-      loginButton
-        .addEventListener(
-          "click",
-          handleLogin
-        );
-    }
-
-
-    const logoutButton =
-      $("#googleLogoutButton");
-
-    if (
-      logoutButton
-    ) {
-      logoutButton
-        .addEventListener(
-          "click",
-          handleLogout
-        );
-    }
-
-
-    $$("[data-nav]")
-      .forEach(
-        (
-          button
-        ) => {
-          button.addEventListener(
-            "click",
-            () => {
-              if (
-                button.disabled
-              ) {
-                return;
-              }
-
-              if (
-                button.dataset
-                  .nav ===
-                "register-basic"
-              ) {
-                resetDraft();
-              }
-
-              navigate(
-                button
-                  .dataset
-                  .nav
-              );
-            }
-          );
-        }
-      );
-
-
-    $("#backButton")
-      ?.addEventListener(
-        "click",
-        goBack
-      );
-
-
-    $("#participantList")
-      ?.addEventListener(
-        "change",
-        (
-          event
-        ) => {
-          if (
-            !event.target
-              .matches(
-                "input"
-              )
-          ) {
-            return;
-          }
-
-          event.target
-            .closest(
-              ".checkbox-row"
-            )
-            ?.classList
-            .toggle(
-              "is-selected",
-              event.target
-                .checked
-            );
-        }
-      );
-
-
-    $("#goToMapButton")
-      ?.addEventListener(
-        "click",
-        () => {
-          if (
-            validateStep1()
-          ) {
-            navigate(
-              "register-map"
-            );
-          }
-        }
-      );
-
-
-    $("#locateButton")
-      ?.addEventListener(
-        "click",
-        () =>
-          locateCurrentPosition(
-            true
-          )
-      );
-
-
-    $("#undoPointButton")
-      ?.addEventListener(
-        "click",
-        () => {
-          state.mapPoints.pop();
-
-          drawDraftPolygon();
-        }
-      );
-
-
-    $("#resetMapButton")
-      ?.addEventListener(
-        "click",
-        () => {
-          state.mapPoints =
-            [];
-
-          clearDraftMapGraphics();
-        }
-      );
-
-
-    $("#confirmMapButton")
-      ?.addEventListener(
-        "click",
-        () => {
-          if (
-            state.mapPoints
-              .length <
-            3
-          ) {
-            return;
-          }
-
-          state.draft.area = {
-            type:
-              "Polygon",
-
-            coordinates:
-              state.mapPoints
-                .map(
-                  (
-                    [
-                      lng,
-                      lat
-                    ]
-                  ) => [
-                    lng,
-                    lat
-                  ]
-                )
-          };
-
-          navigate(
-            "register-result"
-          );
-        }
-      );
-
-
-    $("#quantityInput")
-      ?.addEventListener(
-        "input",
-        renderConfirm
-      );
-
-
-    $("#saveRecordButton")
-      ?.addEventListener(
-        "click",
-        saveRecord
-      );
-
-
-    $("#viewHistoryButton")
-      ?.addEventListener(
-        "click",
-        () =>
-          navigate(
-            "history"
-          )
-      );
-
-
-    $("#registerAnotherButton")
-      ?.addEventListener(
-        "click",
-        () => {
-          resetDraft();
-
-          navigate(
-            "register-basic"
-          );
-        }
-      );
-
-
-    $("#achievementParticipantSelect")
-      ?.addEventListener(
-        "change",
-        renderAchievements
-      );
-  }
-
-
-  // ============================================================
-  // Auth observer
-  // ============================================================
-
-  function startAuthObserver() {
-    if (
-      !window.SeedStudioAuth
-    ) {
+    if (!list) {
       return;
     }
 
-    window
-      .SeedStudioAuth
-      .observe(
-        async (
-          authState
-        ) => {
-          const previousUid =
-            state
-              .authState
-              ?.user
-              ?.uid;
-
-          state.authState =
-            authState;
-
-          renderAuthState();
-
-          if (
-            authState.authorized &&
-            authState.user?.uid &&
-            authState.user
-              .uid !==
-              previousUid
-          ) {
-            try {
-              await dataRepository
-                .reloadFromFirestore();
-
-              renderHome();
-
-            } catch (
-              error
-            ) {
-              console.warn(
-                "Firestore reload after auth failed.",
-                error
-              );
-            }
-          }
-        }
-      );
-  }
-
-
-  // ============================================================
-  // Initialization
-  // ============================================================
-
-  async function init() {
-    console.log(
-      "SeedStudio Posting initializing..."
+    error?.classList.toggle(
+      "is-hidden",
+      !state.participantError
     );
 
-    renderMasters();
-
-    resetDraft();
-
-    bindEvents();
-
-    setRegistrationAvailability(
-      false
-    );
-
-    try {
-      await dataRepository
-        .initialize();
-
-    } catch (
-      error
+    if (
+      state.participantLoading ||
+      state.participantError
     ) {
-      console.error(
-        "Repository initialization error.",
-        error
-      );
-
-      showAuthError(
-        "認証状態の確認に失敗しました。"
-      );
+      list.innerHTML = "";
+      empty?.classList.add("is-hidden");
+      return;
     }
 
-    startAuthObserver();
+    const searchText =
+      ($("#postingParticipantSearch")
+        ?.value || "")
+        .trim()
+        .toLocaleLowerCase("ja");
 
-    renderAuthState();
+    const candidates =
+      state.participantCandidates
+        .filter(
+          (person) => {
+            if (
+              person.postingEnabled === true
+            ) {
+              return false;
+            }
 
-    renderHome();
+            if (!searchText) {
+              return true;
+            }
+
+            return String(
+              person.name || ""
+            )
+              .toLocaleLowerCase("ja")
+              .includes(searchText);
+          }
+        )
+        .sort(
+          (a, b) =>
+            String(a.name || "").localeCompare(
+              String(b.name || ""),
+              "ja"
+            )
+        );
+
+    list.innerHTML =
+      candidates
+        .map(
+          (person) => `
+            <article
+              class="history-item"
+              style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+              "
+            >
+              <div
+                style="
+                  min-width:0;
+                  flex:1;
+                "
+              >
+                <b
+                  style="
+                    display:block;
+                    margin-bottom:5px;
+                  "
+                >
+                  ${escapeHtml(person.name)}
+                </b>
+
+                ${phaseLabelHtml(person)}
+              </div>
+
+              <button
+                class="button button--primary js-add-posting-participant"
+                type="button"
+                data-person-id="${escapeHtml(
+                  person.personId
+                )}"
+                style="
+                  flex:none;
+                  width:auto;
+                  padding:9px 12px;
+                  margin:0;
+                  font-size:13px;
+                "
+              >
+                追加
+              </button>
+            </article>
+          `
+        )
+        .join("");
+
+    empty?.classList.toggle(
+      "is-hidden",
+      candidates.length > 0
+    );
+  }
+
+  function renderAchievementParticipantSelect() {
+    const select =
+      $("#achievementParticipantSelect");
+
+    if (!select) {
+      return;
+    }
+
+    const previous =
+      select.value;
+
+    const idsInHistory =
+      new Set(
+        dataRepository
+          .load()
+          .flatMap(
+            (record) =>
+              (record.participants || [])
+                .map(
+                  (participant) =>
+                    participant.participantId
+                )
+          )
+      );
+
+    const combined =
+      new Map();
+
+    state.participantCandidates.forEach(
+      (person) => {
+        combined.set(
+          person.personId,
+          person
+        );
+      }
+    );
+
+    idsInHistory.forEach(
+      (personId) => {
+        if (!combined.has(personId)) {
+          combined.set(
+            personId,
+            {
+              personId,
+              name:
+                legacyParticipantNames[
+                  personId
+                ] || personId
+            }
+          );
+        }
+      }
+    );
+
+    const participants =
+      [...combined.values()].sort(
+        (a, b) =>
+          String(a.name || "").localeCompare(
+            String(b.name || ""),
+            "ja"
+          )
+      );
+
+    select.innerHTML =
+      participants
+        .map(
+          (person) =>
+            `<option value="${escapeHtml(
+              person.personId
+            )}">${escapeHtml(
+              person.name
+            )}</option>`
+        )
+        .join("");
+
+    if (
+      previous &&
+      participants.some(
+        (person) =>
+          person.personId ===
+          previous
+      )
+    ) {
+      select.value = previous;
+    }
+  }
+
+  function renderParticipantUI() {
+    renderParticipantList();
+    renderParticipantManagerCurrent();
+    renderParticipantManagerCandidates();
+    renderAchievementParticipantSelect();
+  }
+
+  async function openParticipantManager() {
+    if (!state.authState.authorized) {
+      alert(
+        "Googleログインが必要です。"
+      );
+      return;
+    }
+
+    syncStep1();
 
     navigate(
-      "home"
+      "participant-manager"
     );
 
-    console.log(
-      "SeedStudio Posting ready."
-    );
+    await participantRepository.reload();
   }
 
-
-  document.addEventListener(
-    "DOMContentLoaded",
-    () => {
-      init().catch(
-        (
-          error
-        ) => {
-          console.error(
-            "SeedStudio Posting initialization failed.",
-            error
-          );
-
-          state.authState = {
-            signedIn:
-              false,
-
-            authorized:
-              false,
-
-            user:
-              null,
-
-            staff:
-              null
-          };
-
-          showAuthError(
-            "初期化に失敗しました。"
-          );
-
-          renderHome();
-
-          navigate(
-            "home"
-          );
-        }
-      );
+  async function handleParticipantToggle(
+    personId,
+    enabled,
+    button
+  ) {
+    if (!personId) {
+      return;
     }
-  );
 
-})();
+    const originalText =
+      button?.textContent || "";
+
+    if (button) {
+      button.disabled = true;
+      button.textContent =
+        enabled
+          ? "追加中…"
+          : "変更中…";
+    }
+
+    try {
+      await participantRepository
+        .setEnabled(
+          personId,
+          enabled
+        );
+
+      if (!enabled) {
+        state.draft.participantIds =
+          (
+            state.draft
+              .participantIds ||
+            []
+          ).filter(
+            (id) =>
+              id !==
+              personId
+          );
+
+        delete state.draft
+          .participantSteps[
+            personId
+          ];
+      }
+
+      renderParticipantUI();
