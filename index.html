@@ -127,17 +127,21 @@
 
       <section class="view" data-view="success">
         <section class="section success">
+          <div class="saved-badge">✓ 保存しました</div>
           <div class="success__icon">🎉</div>
           <h2>今日のポスティング完了！</h2>
           <div id="successQuantity" class="success__quantity">0部</div>
           <p>地域に届けました！</p>
+          <section class="card success-summary">
+            <div id="successMeta"></div>
+          </section>
           <div id="successParticipants"></div>
           <p class="help">今日もおつかれさまでした 🌱</p>
-          <button id="registerAnotherButton" class="button button--primary" type="button">続けて登録する</button>
+          <button id="viewHistoryButton" class="button button--primary" type="button">配布履歴で確認する</button>
+          <button id="registerAnotherButton" class="button button--secondary" type="button">続けて登録する</button>
           <button class="button button--secondary" data-nav="home" type="button">ホームへ戻る</button>
         </section>
       </section>
-
       <section class="view" data-view="map">
         <section class="section">
           <h2>配布状況</h2>
