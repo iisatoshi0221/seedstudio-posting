@@ -24,10 +24,18 @@
   };
 
   const state = {
-    currentView: "home",
-    mapPoints: [],
-    draft: {},
-    lastSavedRecord: null,
+  currentView: "home",
+
+  authState: {
+    signedIn: false,
+    authorized: false,
+    user: null,
+    staff: null
+  },
+
+  mapPoints: [],
+  draft: {},
+  lastSavedRecord: null,
     mapsPromise: null,
     postingMap: null,
     postingPolygon: null,
@@ -42,67 +50,241 @@
   const milestoneSteps = [10000, 50000, 100000, 250000, 500000];
 
   const dataRepository = {
-    cache: [],
-    mode: "loading",
 
-    loadLocal() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      try { return JSON.parse(raw); } catch { return []; }
-    },
+  cache: [],
 
-    saveLocal(records) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    },
+  mode: "loading",
 
-    async waitForFirestoreBridge(timeoutMs = 10000) {
-      const started = Date.now();
-      while (!window.SeedStudioFirestore) {
-        if (Date.now() - started > timeoutMs) {
-          throw new Error("Firestore bridge timeout");
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
+
+  loadLocal() {
+
+    const raw =
+      localStorage.getItem(
+        STORAGE_KEY
+      );
+
+    if (!raw) {
+      return [];
+    }
+
+    try {
+
+      return JSON.parse(raw);
+
+    } catch {
+
+      return [];
+    }
+  },
+
+
+  saveLocal(records) {
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(records)
+    );
+  },
+
+
+  async waitForFirebaseBridge(
+    timeoutMs = 10000
+  ) {
+
+    const started =
+      Date.now();
+
+    while (
+      !window.SeedStudioFirestore ||
+      !window.SeedStudioAuth
+    ) {
+
+      if (
+        Date.now() - started >
+        timeoutMs
+      ) {
+
+        throw new Error(
+          "Firebase bridge timeout"
+        );
       }
-      return window.SeedStudioFirestore;
-    },
 
-    async init() {
-      try {
-        const firestore = await this.waitForFirestoreBridge();
-        this.cache = await firestore.listPostingRecords();
-        this.cache.sort((a, b) => (b.postingDate || "").localeCompare(a.postingDate || ""));
-        this.mode = "firestore";
-        this.saveLocal(this.cache);
-      } catch (error) {
-        console.warn("Firestore unavailable. Falling back to localStorage.", error);
-        this.cache = this.loadLocal();
-        this.mode = "local";
+      await new Promise(
+        (resolve) =>
+          setTimeout(resolve, 100)
+      );
+    }
+  },
+
+
+  async init() {
+
+    try {
+
+      await this
+        .waitForFirebaseBridge();
+
+      const authState =
+        await window
+          .SeedStudioAuth
+          .waitUntilReady();
+
+      state.authState =
+        authState;
+
+      renderAuthState();
+
+
+      if (!authState.authorized) {
+
+        this.cache =
+          this.loadLocal();
+
+        this.mode =
+          "auth-required";
+
+        return;
       }
-    },
 
-    load() {
-      return [...this.cache];
-    },
 
-    async add(record) {
-      if (this.mode === "firestore") {
-        try {
-          const firestore = await this.waitForFirestoreBridge();
-          await firestore.savePostingRecord(record);
-          this.cache.push(record);
-          this.saveLocal(this.cache);
-          return "firestore";
-        } catch (error) {
-          console.warn("Firestore save failed. Saving locally.", error);
-          this.mode = "local";
-        }
-      }
+      const records =
+        await window
+          .SeedStudioFirestore
+          .listPostingRecords();
+
+      this.cache =
+        records.sort(
+          (a, b) =>
+            (b.postingDate || "")
+              .localeCompare(
+                a.postingDate || ""
+              )
+        );
+
+      this.mode =
+        "firestore";
+
+      this.saveLocal(
+        this.cache
+      );
+
+    } catch (error) {
+
+      console.warn(
+        "Firestore unavailable.",
+        error
+      );
+
+      this.cache =
+        this.loadLocal();
+
+      this.mode =
+        "local";
+
+      renderAuthState();
+    }
+  },
+
+
+  load() {
+
+    return [
+      ...this.cache
+    ];
+  },
+
+
+  async reloadFromFirestore() {
+
+    if (
+      !state.authState.authorized
+    ) {
+
+      return;
+    }
+
+    const records =
+      await window
+        .SeedStudioFirestore
+        .listPostingRecords();
+
+    this.cache =
+      records.sort(
+        (a, b) =>
+          (b.postingDate || "")
+            .localeCompare(
+              a.postingDate || ""
+            )
+      );
+
+    this.mode =
+      "firestore";
+
+    this.saveLocal(
+      this.cache
+    );
+  },
+
+
+  async add(record) {
+
+    if (
+      !state.authState.authorized
+    ) {
+
+      throw new Error(
+        "LOGIN_REQUIRED"
+      );
+    }
+
+
+    try {
+
+      const saved =
+        await window
+          .SeedStudioFirestore
+          .savePostingRecord(
+            record
+          );
+
+      this.cache.push(saved);
+
+      this.saveLocal(
+        this.cache
+      );
+
+      this.mode =
+        "firestore";
+
+      return {
+        mode: "firestore",
+        record: saved
+      };
+
+    } catch (error) {
+
+      console.error(
+        "Firestore save failed.",
+        error
+      );
 
       this.cache.push(record);
-      this.saveLocal(this.cache);
-      return "local";
+
+      this.saveLocal(
+        this.cache
+      );
+
+      this.mode =
+        "local";
+
+      return {
+        mode: "local",
+        record
+      };
     }
-  };
+  }
+};
+  
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
@@ -127,6 +309,123 @@
     return Number(v || 0).toLocaleString("ja-JP");
   }
 
+  function renderAuthState() {
+
+  const auth =
+    state.authState;
+
+  const loading =
+    $("#authLoading");
+
+  const signedOut =
+    $("#authSignedOut");
+
+  const signedIn =
+    $("#authSignedIn");
+
+
+  if (!loading) {
+    return;
+  }
+
+
+  loading.classList.add(
+    "is-hidden"
+  );
+
+
+  if (!auth.signedIn) {
+
+    signedOut.classList.remove(
+      "is-hidden"
+    );
+
+    signedIn.classList.add(
+      "is-hidden"
+    );
+
+    setRegistrationAvailability(
+      false
+    );
+
+    return;
+  }
+
+
+  signedOut.classList.add(
+    "is-hidden"
+  );
+
+  signedIn.classList.remove(
+    "is-hidden"
+  );
+
+
+  $("#authUserName")
+    .textContent =
+      auth.user?.displayName ||
+      auth.user?.email ||
+      "ログイン中";
+
+
+  $("#authUserEmail")
+    .textContent =
+      auth.user?.email || "";
+
+
+  const status =
+    $("#authPermissionStatus");
+
+
+  if (auth.authorized) {
+
+    status.textContent =
+      "✓ SeedStudio職員として認証済み";
+
+    status.style.color =
+      "#2F6D4F";
+
+    setRegistrationAvailability(
+      true
+    );
+
+  } else {
+
+    status.textContent =
+      "このGoogleアカウントはSeedStudio職員として登録されていません";
+
+    status.style.color =
+      "#B54848";
+
+    setRegistrationAvailability(
+      false
+    );
+  }
+}
+
+
+function setRegistrationAvailability(
+  enabled
+) {
+
+  const button =
+    document.querySelector(
+      '[data-nav="register-basic"]'
+    );
+
+  if (!button) {
+    return;
+  }
+
+  button.disabled =
+    !enabled;
+
+  button.style.opacity =
+    enabled
+      ? "1"
+      : "0.55";
+}
+  
   function getMapsApiKey() {
     return window.SEEDSTUDIO_CONFIG?.googleMapsApiKey || "";
   }
@@ -591,10 +890,50 @@
       createdAt: new Date().toISOString()
     };
 
-    const storageMode = await dataRepository.add(record);
-    record.storageMode = storageMode;
-    state.lastSavedRecord = record;
-    navigate("success");
+    let result;
+
+try {
+
+  result =
+    await dataRepository.add(
+      record
+    );
+
+} catch (error) {
+
+  if (
+    error.message ===
+    "LOGIN_REQUIRED"
+  ) {
+
+    alert(
+      "Googleログインが必要です。"
+    );
+
+  } else {
+
+    alert(
+      "保存中にエラーが発生しました。"
+    );
+  }
+
+  saveButton.disabled =
+    false;
+
+  saveButton.textContent =
+    "この内容で登録する";
+
+  return;
+}
+
+
+result.record.storageMode =
+  result.mode;
+
+state.lastSavedRecord =
+  result.record;
+
+navigate("success");
 
     window.setTimeout(() => {
       saveButton.disabled = false;
@@ -734,6 +1073,86 @@
   }
 
   function bindEvents() {
+    $("#googleLoginButton")
+  .addEventListener(
+    "click",
+    async () => {
+
+      try {
+
+        const authState =
+          await window
+            .SeedStudioAuth
+            .signIn();
+
+        state.authState =
+          authState;
+
+        renderAuthState();
+
+
+        if (
+          authState.authorized
+        ) {
+
+          await dataRepository
+            .reloadFromFirestore();
+
+          renderHome();
+
+          alert(
+            "Googleログインが完了しました。"
+          );
+
+        } else {
+
+          alert(
+            "このGoogleアカウントはSeedStudio職員として登録されていません。"
+          );
+        }
+
+      } catch (error) {
+
+        console.error(
+          "Login failed.",
+          error
+        );
+
+        alert(
+          "Googleログインを完了できませんでした。"
+        );
+      }
+    }
+  );
+
+
+$("#googleLogoutButton")
+  .addEventListener(
+    "click",
+    async () => {
+
+      await window
+        .SeedStudioAuth
+        .signOut();
+
+      state.authState = {
+        signedIn: false,
+        authorized: false,
+        user: null,
+        staff: null
+      };
+
+      dataRepository.mode =
+        "auth-required";
+
+      renderAuthState();
+
+      navigate("home");
+    }
+  );
+
+
+    
     $$("[data-nav]").forEach(b => b.addEventListener("click", () => {
       if (b.dataset.nav === "register-basic") resetDraft();
       navigate(b.dataset.nav);
@@ -785,13 +1204,70 @@
   }
 
   async function init() {
-    renderMasters();
-    resetDraft();
-    bindEvents();
-    await dataRepository.init();
-    renderHome();
-    navigate("home");
+
+  renderMasters();
+
+  resetDraft();
+
+  bindEvents();
+
+
+  await dataRepository.init();
+
+
+  if (
+    window.SeedStudioAuth
+  ) {
+
+    window
+      .SeedStudioAuth
+      .observe(
+        async (
+          authState
+        ) => {
+
+          const previousUid =
+            state
+              .authState
+              ?.user
+              ?.uid;
+
+          state.authState =
+            authState;
+
+          renderAuthState();
+
+
+          if (
+            authState.authorized &&
+            authState.user?.uid !==
+              previousUid
+          ) {
+
+            try {
+
+              await dataRepository
+                .reloadFromFirestore();
+
+              renderHome();
+
+            } catch (error) {
+
+              console.error(
+                "Firestore reload failed.",
+                error
+              );
+            }
+          }
+        }
+      );
   }
+
+
+  renderHome();
+
+  navigate("home");
+}
 
   document.addEventListener("DOMContentLoaded", () => {
     init().catch((error) => {
