@@ -1,2 +1,2 @@
-# -seedstudio-posting
+# seedstudio-posting
     SeedStudio Posting Web App
