@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2F6D4F">
+  <title>SeedStudio Posting</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="app-header">
+      <button id="backButton" class="icon-button is-hidden" type="button" aria-label="戻る">←</button>
+      <h1 id="pageTitle" class="app-header__title">SeedStudio Posting</h1>
+      <div class="app-header__action"></div>
+    </header>
+
+    <main class="page">
+      <section class="view is-active" data-view="home">
+        <div class="brand-header">
+          <div class="brand-mark">👣🌱</div>
+          <div class="brand-header__name">SeedStudio Posting</div>
+          <div class="brand-header__tagline">歩いて届ける、未来のたね。</div>
+        </div>
+
+        <div class="home-menu">
+          <button class="home-menu-card home-menu-card--primary" data-nav="register-basic" type="button">
+            <span class="home-menu-card__icon">＋</span>
+            <span><strong>配布実績を登録</strong><small>今日のポスティングを登録</small></span>
+            <span>›</span>
+          </button>
+          <button class="home-menu-card" data-nav="map" type="button">
+            <span class="home-menu-card__icon">🗺</span>
+            <span><strong>配布状況を見る</strong><small>どこに配ったか確認</small></span>
+            <span>›</span>
+          </button>
+          <button class="home-menu-card" data-nav="achievements" type="button">
+            <span class="home-menu-card__icon">🌱</span>
+            <span><strong>みんなの成果</strong><small>歩数や参加回数を見る</small></span>
+            <span>›</span>
+          </button>
+          <button class="home-menu-card" data-nav="history" type="button">
+            <span class="home-menu-card__icon">📋</span>
+            <span><strong>配布履歴</strong><small>過去の記録を確認</small></span>
+            <span>›</span>
+          </button>
+        </div>
+
+        <section class="card summary-card">
+          <div class="summary-card__header">
+            <h2>今月のPosting</h2><span id="summaryMonth"></span>
+          </div>
+          <div class="metric-grid metric-grid--three">
+            <div class="metric-card"><div>📮</div><b id="homeTotalQuantity">0部</b><small>配布部数</small></div>
+            <div class="metric-card"><div>🚶</div><b id="homeTotalSteps">0歩</b><small>歩数</small></div>
+            <div class="metric-card"><div>🌱</div><b id="homeParticipationCount">0回</b><small>参加回数</small></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" data-view="register-basic">
+        <div class="stepper">
+          <div class="stepper__item is-active"><span>1</span><small>基本情報</small></div><i></i>
+          <div class="stepper__item"><span>2</span><small>配布範囲</small></div><i></i>
+          <div class="stepper__item"><span>3</span><small>今日の成果</small></div>
+        </div>
+        <section class="section">
+          <h2>今日、誰と何を配りましたか？</h2>
+          <label class="form-field">配布日<input id="postingDate" class="input" type="date"></label>
+          <label class="form-field">担当職員<select id="staffSelect" class="select"></select></label>
+          <div class="form-field">
+            <span>一緒に参加した人</span>
+            <small>複数選択できます</small>
+            <div id="participantList" class="checkbox-list"></div>
+            <div id="participantError" class="field-error is-hidden">一緒に参加した人を1名以上選んでください</div>
+          </div>
+          <label class="form-field">配布したチラシ<select id="flyerSelect" class="select"></select></label>
+          <button id="goToMapButton" class="button button--primary" type="button">次へ</button>
+        </section>
+      </section>
+
+      <section class="view" data-view="register-map">
+        <div class="stepper">
+          <div class="stepper__item is-done"><span>1</span><small>基本情報</small></div><i class="is-done"></i>
+          <div class="stepper__item is-active"><span>2</span><small>配布範囲</small></div><i></i>
+          <div class="stepper__item"><span>3</span><small>今日の成果</small></div>
+        </div>
+        <section class="section">
+          <h2>配った範囲を囲んでください</h2>
+          <p class="help">道路や住宅ブロックに沿って、3か所以上タップします。</p>
+          <div id="postingMap" class="map-container">
+            <div class="map-placeholder">地図プロトタイプ<br><small>Google Maps接続前</small></div>
+            <svg id="mapSvg" class="map-overlay"></svg>
+          </div>
+          <div id="overlapWarning" class="alert-banner is-hidden">⚠ この付近には最近の配布履歴があります</div>
+          <div class="two-buttons">
+            <button id="undoPointButton" class="button button--secondary" type="button">↩ 1つ戻す</button>
+            <button id="resetMapButton" class="button button--secondary" type="button">やり直す</button>
+          </div>
+          <button id="confirmMapButton" class="button button--primary" type="button" disabled>この範囲で確定</button>
+        </section>
+      </section>
+
+      <section class="view" data-view="register-result">
+        <div class="stepper">
+          <div class="stepper__item is-done"><span>1</span><small>基本情報</small></div><i class="is-done"></i>
+          <div class="stepper__item is-done"><span>2</span><small>配布範囲</small></div><i class="is-done"></i>
+          <div class="stepper__item is-active"><span>3</span><small>今日の成果</small></div>
+        </div>
+        <section class="section">
+          <h2>今日の成果を入力しよう！</h2>
+          <label class="form-field">📮 配布部数
+            <div class="number-input"><input id="quantityInput" class="input" type="number" min="1" inputmode="numeric" placeholder="例：180"><span>部</span></div>
+          </label>
+          <div class="form-field">
+            <span>🚶 今日の歩数</span>
+            <div id="participantSteps" class="participant-steps"></div>
+          </div>
+          <section class="card confirm-card">
+            <h3>登録内容</h3>
+            <div id="confirmContent"></div>
+            <div class="map-preview"><svg id="confirmMapSvg" class="map-overlay"></svg></div>
+          </section>
+          <button id="saveRecordButton" class="button button--primary" type="button">この内容で登録する</button>
+        </section>
+      </section>
+
+      <section class="view" data-view="success">
+        <section class="section success">
+          <div class="success__icon">🎉</div>
+          <h2>今日のポスティング完了！</h2>
+          <div id="successQuantity" class="success__quantity">0部</div>
+          <p>地域に届けました！</p>
+          <div id="successParticipants"></div>
+          <p class="help">今日もおつかれさまでした 🌱</p>
+          <button id="registerAnotherButton" class="button button--primary" type="button">続けて登録する</button>
+          <button class="button button--secondary" data-nav="home" type="button">ホームへ戻る</button>
+        </section>
+      </section>
+
+      <section class="view" data-view="map">
+        <section class="section">
+          <h2>配布状況</h2>
+          <div class="map-container">
+            <div class="map-placeholder">配布状況マップ<br><small>Google Maps接続時に置換</small></div>
+            <svg id="historyMapSvg" class="map-overlay"></svg>
+          </div>
+          <div id="mapStatusList" class="history-list"></div>
+        </section>
+      </section>
+
+      <section class="view" data-view="achievements">
+        <section class="section">
+          <label class="form-field">利用者<select id="achievementParticipantSelect" class="select"></select></label>
+          <div class="achievement-hero">
+            <span>今月</span>
+            <strong><span id="achievementMonthSteps">0</span><small>歩</small></strong>
+            <small>今月のポスティング</small>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-card"><div>👣</div><b id="achievementTotalSteps">0歩</b><small>累計歩数</small></div>
+            <div class="metric-card"><div>🌱</div><b id="achievementCount">0回</b><small>参加回数</small></div>
+            <div class="metric-card"><div>📮</div><b id="achievementQuantity">0部</b><small>累計配布部数</small></div>
+            <div class="metric-card"><div>🏆</div><b id="achievementBest">0歩</b><small>自己ベスト</small></div>
+          </div>
+          <div class="card progress-goal">
+            <strong id="achievementGoalMessage"></strong>
+            <div class="progress-bar"><div id="achievementProgressFill"></div></div>
+            <small id="achievementPercent">0%</small>
+          </div>
+          <div id="milestoneRow" class="milestone-row"></div>
+        </section>
+      </section>
+
+      <section class="view" data-view="history">
+        <section class="section">
+          <h2>配布履歴</h2>
+          <div id="historyList" class="history-list"></div>
+          <div id="historyEmpty" class="empty-state is-hidden">📭<br>まだ配布履歴がありません</div>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="./app.js" defer></script>
+</body>
+</html>
