@@ -15,6 +15,7 @@ import {
 
 import {
   initializeAuth,
+  getAuth,
   indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -27,7 +28,13 @@ import {
 
 
 // ============================================================
-// Firebase configuration
+// SeedStudio Posting
+// Firebase bridge
+// ============================================================
+
+
+// ============================================================
+// Configuration
 // ============================================================
 
 const config =
@@ -41,7 +48,7 @@ if (!config) {
 
 
 // ============================================================
-// Firebase initialization
+// Firebase app
 // ============================================================
 
 const app =
@@ -53,12 +60,8 @@ const app =
 // ============================================================
 // Authentication
 //
-// Explicit persistence order:
-// 1. IndexedDB
-// 2. localStorage
-// 3. sessionStorage
-//
-// This gives iPhone / Android / PC several storage fallbacks.
+// iPhone / Android / PC で安定させるため、
+// 複数の persistence を明示する。
 // ============================================================
 
 let auth;
@@ -80,24 +83,30 @@ try {
 
 } catch (error) {
   /*
-   * initializeAuth throws if Auth was already initialized.
-   * This normally does not happen in Posting,
-   * but retaining the existing instance is safer.
+   * Firebase Auth がすでに初期化されている場合は
+   * 既存インスタンスを利用する。
    */
-
-  const module =
-    await import(
-      "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js"
-    );
+  console.warn(
+    "Firebase Auth already initialized.",
+    error
+  );
 
   auth =
-    module.getAuth(app);
+    getAuth(app);
 }
 
+
+// ============================================================
+// Firestore
+// ============================================================
 
 const db =
   getFirestore(app);
 
+
+// ============================================================
+// Google provider
+// ============================================================
 
 const googleProvider =
   new GoogleAuthProvider();
@@ -108,10 +117,238 @@ googleProvider.setCustomParameters({
 
 
 // ============================================================
+// Coordinate conversion
+//
+// app.js:
+// [
+//   [lng, lat],
+//   [lng, lat]
+// ]
+//
+// Firestore:
+// [
+//   { lng, lat },
+//   { lng, lat }
+// ]
+//
+// Firestoreでは配列の中の配列を避け、
+// オブジェクト形式にして保存する。
+// ============================================================
+
+function encodeCoordinates(
+  coordinates
+) {
+  if (
+    !Array.isArray(
+      coordinates
+    )
+  ) {
+    return [];
+  }
+
+  return coordinates
+    .map(
+      (point) => {
+
+        /*
+         * app.js形式
+         * [lng, lat]
+         */
+        if (
+          Array.isArray(point) &&
+          point.length >= 2
+        ) {
+          const lng =
+            Number(point[0]);
+
+          const lat =
+            Number(point[1]);
+
+          if (
+            Number.isFinite(lng) &&
+            Number.isFinite(lat)
+          ) {
+            return {
+              lng,
+              lat
+            };
+          }
+        }
+
+
+        /*
+         * すでにFirestore形式の場合
+         * { lng, lat }
+         */
+        if (
+          point &&
+          typeof point ===
+            "object" &&
+          Number.isFinite(
+            Number(point.lng)
+          ) &&
+          Number.isFinite(
+            Number(point.lat)
+          )
+        ) {
+          return {
+            lng:
+              Number(point.lng),
+
+            lat:
+              Number(point.lat)
+          };
+        }
+
+
+        return null;
+      }
+    )
+    .filter(Boolean);
+}
+
+
+function decodeCoordinates(
+  coordinates
+) {
+  if (
+    !Array.isArray(
+      coordinates
+    )
+  ) {
+    return [];
+  }
+
+  return coordinates
+    .map(
+      (point) => {
+
+        /*
+         * 旧形式にも対応
+         * [lng, lat]
+         */
+        if (
+          Array.isArray(point) &&
+          point.length >= 2
+        ) {
+          const lng =
+            Number(point[0]);
+
+          const lat =
+            Number(point[1]);
+
+          if (
+            Number.isFinite(lng) &&
+            Number.isFinite(lat)
+          ) {
+            return [
+              lng,
+              lat
+            ];
+          }
+        }
+
+
+        /*
+         * Firestore保存形式
+         * { lng, lat }
+         */
+        if (
+          point &&
+          typeof point ===
+            "object" &&
+          Number.isFinite(
+            Number(point.lng)
+          ) &&
+          Number.isFinite(
+            Number(point.lat)
+          )
+        ) {
+          return [
+            Number(point.lng),
+            Number(point.lat)
+          ];
+        }
+
+
+        return null;
+      }
+    )
+    .filter(Boolean);
+}
+
+
+// ============================================================
+// Posting record conversion
+// ============================================================
+
+function encodePostingRecord(
+  record
+) {
+  if (!record) {
+    return record;
+  }
+
+  const area =
+    record.area &&
+    record.area.type ===
+      "Polygon"
+      ? {
+          type:
+            "Polygon",
+
+          coordinates:
+            encodeCoordinates(
+              record.area
+                .coordinates
+            )
+        }
+      : record.area;
+
+  return {
+    ...record,
+    area
+  };
+}
+
+
+function decodePostingRecord(
+  record
+) {
+  if (!record) {
+    return record;
+  }
+
+  const area =
+    record.area &&
+    record.area.type ===
+      "Polygon"
+      ? {
+          type:
+            "Polygon",
+
+          coordinates:
+            decodeCoordinates(
+              record.area
+                .coordinates
+            )
+        }
+      : record.area;
+
+  return {
+    ...record,
+    area
+  };
+}
+
+
+// ============================================================
 // Staff profile
 // ============================================================
 
-async function getStaffProfile(user) {
+async function getStaffProfile(
+  user
+) {
   if (!user) {
     return null;
   }
@@ -124,9 +361,13 @@ async function getStaffProfile(user) {
     );
 
   const snapshot =
-    await getDoc(reference);
+    await getDoc(
+      reference
+    );
 
-  if (!snapshot.exists()) {
+  if (
+    !snapshot.exists()
+  ) {
     return null;
   }
 
@@ -143,7 +384,9 @@ async function getStaffProfile(user) {
 // Auth state
 // ============================================================
 
-async function buildAuthState(user) {
+async function buildAuthState(
+  user
+) {
   if (!user) {
     return {
       signedIn: false,
@@ -153,7 +396,8 @@ async function buildAuthState(user) {
     };
   }
 
-  let staff = null;
+  let staff =
+    null;
 
   try {
     staff =
@@ -179,7 +423,8 @@ async function buildAuthState(user) {
     );
 
   return {
-    signedIn: true,
+    signedIn:
+      true,
 
     authorized,
 
@@ -188,13 +433,16 @@ async function buildAuthState(user) {
         user.uid,
 
       email:
-        user.email || "",
+        user.email ||
+        "",
 
       displayName:
-        user.displayName || "",
+        user.displayName ||
+        "",
 
       photoURL:
-        user.photoURL || ""
+        user.photoURL ||
+        ""
     },
 
     staff
@@ -203,7 +451,7 @@ async function buildAuthState(user) {
 
 
 // ============================================================
-// Popup sign-in
+// Google sign-in
 // ============================================================
 
 async function signInGoogle() {
@@ -220,20 +468,9 @@ async function signInGoogle() {
 
   } catch (error) {
     console.error(
-      "Google popup sign-in failed.",
+      "Google sign-in failed.",
       error
     );
-
-    /*
-     * Common mobile cases:
-     * - popup blocked
-     * - popup closed
-     * - Safari opens auth in another browser context
-     *
-     * Do NOT automatically switch to signInWithRedirect here.
-     * Redirect auth on GitHub Pages can fail under Safari's
-     * third-party storage restrictions.
-     */
 
     if (
       error?.code ===
@@ -259,7 +496,7 @@ async function signInGoogle() {
 
 
 // ============================================================
-// Public Auth bridge
+// Public authentication bridge
 // ============================================================
 
 window.SeedStudioAuth = {
@@ -270,13 +507,16 @@ window.SeedStudioAuth = {
 
 
   async signOut() {
-    await signOut(auth);
+    await signOut(
+      auth
+    );
   },
 
 
   observe(callback) {
     return onAuthStateChanged(
       auth,
+
       async (user) => {
         try {
           const state =
@@ -284,7 +524,9 @@ window.SeedStudioAuth = {
               user
             );
 
-          callback(state);
+          callback(
+            state
+          );
 
         } catch (error) {
           console.error(
@@ -307,17 +549,22 @@ window.SeedStudioAuth = {
   waitUntilReady() {
     return new Promise(
       (resolve) => {
+
         const unsubscribe =
           onAuthStateChanged(
             auth,
+
             async (user) => {
               unsubscribe();
 
               try {
-                resolve(
+                const state =
                   await buildAuthState(
                     user
-                  )
+                  );
+
+                resolve(
+                  state
                 );
 
               } catch (error) {
@@ -352,6 +599,10 @@ window.SeedStudioAuth = {
 
 window.SeedStudioFirestore = {
 
+  // ------------------------------------------------------------
+  // Load all posting records
+  // ------------------------------------------------------------
+
   async listPostingRecords() {
     const user =
       auth.currentUser;
@@ -371,17 +622,39 @@ window.SeedStudioFirestore = {
       );
 
     return snapshot.docs.map(
-      (documentSnapshot) => ({
-        id:
-          documentSnapshot.id,
+      (documentSnapshot) => {
 
-        ...documentSnapshot.data()
-      })
+        const rawRecord = {
+          id:
+            documentSnapshot.id,
+
+          ...documentSnapshot.data()
+        };
+
+        /*
+         * Firestore形式
+         * {lng,lat}
+         *
+         * ↓
+         *
+         * app.js形式
+         * [lng,lat]
+         */
+        return decodePostingRecord(
+          rawRecord
+        );
+      }
     );
   },
 
 
-  async savePostingRecord(record) {
+  // ------------------------------------------------------------
+  // Save posting record
+  // ------------------------------------------------------------
+
+  async savePostingRecord(
+    record
+  ) {
     const user =
       auth.currentUser;
 
@@ -391,15 +664,48 @@ window.SeedStudioFirestore = {
       );
     }
 
+
+    if (
+      !record?.id
+    ) {
+      throw new Error(
+        "Posting record ID is missing."
+      );
+    }
+
+
+    /*
+     * app.js形式
+     * [lng,lat]
+     *
+     * ↓
+     *
+     * Firestore形式
+     * {lng,lat}
+     */
+    const encodedRecord =
+      encodePostingRecord(
+        record
+      );
+
+
     const payload = {
-      ...record,
+      ...encodedRecord,
 
       createdByUid:
         user.uid,
 
       createdByEmail:
-        user.email || ""
+        user.email ||
+        ""
     };
+
+
+    console.log(
+      "Saving Posting record to Firestore.",
+      payload
+    );
+
 
     await setDoc(
       doc(
@@ -410,22 +716,32 @@ window.SeedStudioFirestore = {
       payload
     );
 
-    return payload;
+
+    /*
+     * app.jsへ返すときは
+     * 再び [lng,lat] 形式へ戻す。
+     */
+    return decodePostingRecord(
+      payload
+    );
   }
 };
 
 
 // ============================================================
-// Debug information
+// Debug
 // ============================================================
 
 console.log(
   "SeedStudio Firebase bridge ready.",
   {
+    projectId:
+      config.projectId,
+
     signedIn:
       !!auth.currentUser,
 
-    projectId:
-      config.projectId
+    coordinateFormat:
+      "Firestore:{lng,lat} / App:[lng,lat]"
   }
 );
