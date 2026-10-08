@@ -266,17 +266,24 @@
   }
 
   function saveRecord() {
+    const saveButton = $("#saveRecordButton");
+    if (saveButton.disabled) return;
+    saveButton.disabled = true;
+    saveButton.textContent = "保存しています…";
+
     state.draft.quantity = Number($("#quantityInput").value || 0);
     const validQty = state.draft.quantity > 0;
     const validSteps = state.draft.participantIds.every(id => Number(state.draft.participantSteps[id] || 0) > 0);
 
     if (!validQty || !validSteps) {
       alert("配布部数と参加した人全員の歩数を入力してください。");
+      saveButton.disabled = false;
+      saveButton.textContent = "この内容で登録する";
       return;
     }
 
     const record = {
-      id: `P-${Date.now()}`,
+      id: "P-" + Date.now(),
       postingDate: state.draft.postingDate,
       staffId: state.draft.staffId,
       flyerId: state.draft.flyerId,
@@ -289,19 +296,42 @@
     dataRepository.add(record);
     state.lastSavedRecord = record;
     navigate("success");
-  }
 
+    window.setTimeout(() => {
+      saveButton.disabled = false;
+      saveButton.textContent = "この内容で登録する";
+    }, 300);
+  }
   function renderSuccess() {
     const r = state.lastSavedRecord;
     if (!r) return;
-    $("#successQuantity").textContent = `${formatNumber(r.quantity)}部`;
-    $("#successParticipants").innerHTML = r.participants.map(p => `
-      <div class="participant-result">
-        ${names.participant(p.participantId)}
-        <b>🚶 ${formatNumber(p.steps)}歩</b>
-      </div>`).join("");
-  }
 
+    $("#successQuantity").textContent = formatNumber(r.quantity) + "部";
+
+    const savedAt = new Date(r.createdAt);
+    const savedAtText = Number.isNaN(savedAt.getTime())
+      ? ""
+      : savedAt.toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+    $("#successMeta").innerHTML =
+      '<div class="confirm-row"><span>保存状態</span><b>✓ 保存済み</b></div>' +
+      '<div class="confirm-row"><span>配布日</span><b>' + r.postingDate + '</b></div>' +
+      '<div class="confirm-row"><span>担当職員</span><b>' + names.staff(r.staffId) + '</b></div>' +
+      '<div class="confirm-row"><span>チラシ</span><b>' + names.flyer(r.flyerId) + '</b></div>' +
+      '<div class="confirm-row"><span>保存日時</span><b>' + savedAtText + '</b></div>';
+
+    $("#successParticipants").innerHTML = r.participants.map(p =>
+      '<div class="participant-result">' +
+      names.participant(p.participantId) +
+      '<b>🚶 ' + formatNumber(p.steps) + '歩</b></div>'
+    ).join("");
+  }
   function renderHistory() {
     const records = dataRepository.load().sort((a,b) => b.postingDate.localeCompare(a.postingDate));
     $("#historyEmpty").classList.toggle("is-hidden", records.length > 0);
@@ -413,6 +443,9 @@
     $("#quantityInput").addEventListener("input", renderConfirm);
     $("#saveRecordButton").addEventListener("click", saveRecord);
 
+    $("#viewHistoryButton").addEventListener("click", () => {
+      navigate("history");
+    });
     $("#registerAnotherButton").addEventListener("click", () => {
       resetDraft();
       navigate("register-basic");
