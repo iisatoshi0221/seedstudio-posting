@@ -89,8 +89,9 @@
           <h2>配った範囲を囲んでください</h2>
           <p class="help">道路や住宅ブロックに沿って、3か所以上タップします。</p>
           <div id="postingMap" class="map-container">
-            <div class="map-placeholder">地図プロトタイプ<br><small>Google Maps接続前</small></div>
-            <svg id="mapSvg" class="map-overlay"></svg>
+            <div id="postingGoogleMap" class="google-map"></div>
+            <div id="postingMapStatus" class="map-status">Google Mapsを読み込み中…</div>
+            <button id="locateButton" class="map-locate-button" type="button">◎ 現在地へ</button>
           </div>
           <div id="overlapWarning" class="alert-banner is-hidden">⚠ この付近には最近の配布履歴があります</div>
           <div class="two-buttons">
@@ -119,7 +120,7 @@
           <section class="card confirm-card">
             <h3>登録内容</h3>
             <div id="confirmContent"></div>
-            <div class="map-preview"><svg id="confirmMapSvg" class="map-overlay"></svg></div>
+            <div class="map-preview"><div id="confirmGoogleMap" class="google-map"></div></div>
           </section>
           <button id="saveRecordButton" class="button button--primary" type="button">この内容で登録する</button>
         </section>
@@ -146,8 +147,8 @@
         <section class="section">
           <h2>配布状況</h2>
           <div class="map-container">
-            <div class="map-placeholder">配布状況マップ<br><small>Google Maps接続時に置換</small></div>
-            <svg id="historyMapSvg" class="map-overlay"></svg>
+            <div id="historyGoogleMap" class="google-map"></div>
+            <div id="historyMapStatus" class="map-status">Google Mapsを読み込み中…</div>
           </div>
           <div id="mapStatusList" class="history-list"></div>
         </section>
@@ -185,6 +186,7 @@
       </section>
     </main>
   </div>
+  <script src="./config.js"></script>
   <script src="./app.js" defer></script>
 </body>
 </html>
