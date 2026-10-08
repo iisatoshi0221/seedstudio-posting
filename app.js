@@ -2,6 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "seedstudio-posting-v0.1-records";
+  const DEFAULT_CENTER = { lat: 35.6074, lng: 140.1065 };
+  const DEFAULT_ZOOM = 14;
 
   const master = {
     staff: [
@@ -25,7 +27,16 @@
     currentView: "home",
     mapPoints: [],
     draft: {},
-    lastSavedRecord: null
+    lastSavedRecord: null,
+    mapsPromise: null,
+    postingMap: null,
+    postingPolygon: null,
+    postingMarkers: [],
+    postingHistoryPolygons: [],
+    confirmMap: null,
+    confirmPolygon: null,
+    historyMap: null,
+    historyPolygons: []
   };
 
   const milestoneSteps = [10000, 50000, 100000, 250000, 500000];
@@ -88,6 +99,49 @@
     return Number(v || 0).toLocaleString("ja-JP");
   }
 
+  function getMapsApiKey() {
+    return window.SEEDSTUDIO_CONFIG?.googleMapsApiKey || "";
+  }
+
+  function isConfiguredMapsKey(key) {
+    return !!key && !key.includes("PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE");
+  }
+
+  function setMapStatus(id, message, isError = false) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = message;
+    el.classList.toggle("is-error", isError);
+    el.classList.remove("is-hidden");
+  }
+
+  function hideMapStatus(id) {
+    $(id)?.classList.add("is-hidden");
+  }
+
+  function loadGoogleMaps() {
+    if (window.google?.maps) return Promise.resolve(window.google.maps);
+    if (state.mapsPromise) return state.mapsPromise;
+
+    const key = getMapsApiKey();
+    if (!isConfiguredMapsKey(key)) {
+      state.mapsPromise = Promise.reject(new Error("Google Maps APIキーが未設定です。"));
+      return state.mapsPromise;
+    }
+
+    state.mapsPromise = new Promise((resolve, reject) => {
+      window.__seedStudioMapsReady = () => resolve(window.google.maps);
+      const script = document.createElement("script");
+      script.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&callback=__seedStudioMapsReady&v=weekly";
+      script.async = true;
+      script.defer = true;
+      script.onerror = () => reject(new Error("Google Mapsを読み込めませんでした。"));
+      document.head.appendChild(script);
+    });
+
+    return state.mapsPromise;
+  }
+
   function resetDraft() {
     state.mapPoints = [];
     state.draft = {
@@ -99,15 +153,18 @@
       quantity: 0,
       participantSteps: {}
     };
+
     $("#postingDate").value = state.draft.postingDate;
     $("#staffSelect").value = state.draft.staffId;
     $("#flyerSelect").value = state.draft.flyerId;
     $("#quantityInput").value = "";
+
     $$("#participantList input").forEach(i => {
       i.checked = false;
       i.closest(".checkbox-row")?.classList.remove("is-selected");
     });
-    drawPolygon($("#mapSvg"), []);
+
+    clearDraftMapGraphics();
   }
 
   function navigate(view) {
@@ -128,11 +185,12 @@
     $("#pageTitle").textContent = titles[view] || "SeedStudio Posting";
 
     if (view === "home") renderHome();
+    if (view === "register-map") window.setTimeout(initPostingMap, 0);
     if (view === "register-result") renderResultStep();
     if (view === "success") renderSuccess();
     if (view === "achievements") renderAchievements();
     if (view === "history") renderHistory();
-    if (view === "map") renderMapStatus();
+    if (view === "map") window.setTimeout(renderMapStatus, 0);
 
     window.scrollTo(0, 0);
   }
@@ -188,47 +246,226 @@
     return ok;
   }
 
-  function normalizedPoint(event, element) {
-    const rect = element.getBoundingClientRect();
-    return [
-      Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
-    ];
+  function toLatLngPath(coords) {
+    return (coords || []).map(([lng, lat]) => ({ lat, lng }));
   }
 
-  function drawPolygon(svg, points, withMarkers = false) {
-    if (!svg) return;
-    svg.innerHTML = "";
-    if (!points?.length) return;
-
-    const w = svg.clientWidth || svg.parentElement.clientWidth || 300;
-    const h = svg.clientHeight || svg.parentElement.clientHeight || 200;
-
-    const poly = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-    poly.setAttribute("points", points.map(([x,y]) => `${x*w},${y*h}`).join(" "));
-    poly.setAttribute("fill","rgba(47,109,79,.23)");
-    poly.setAttribute("stroke","#2F6D4F");
-    poly.setAttribute("stroke-width","3");
-    svg.appendChild(poly);
-
-    if (withMarkers) {
-      points.forEach(([x,y], index) => {
-        const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
-        c.setAttribute("cx",x*w); c.setAttribute("cy",y*h); c.setAttribute("r","13");
-        c.setAttribute("fill","#2F6D4F"); c.setAttribute("stroke","#fff"); c.setAttribute("stroke-width","2");
-        const t = document.createElementNS("http://www.w3.org/2000/svg","text");
-        t.setAttribute("x",x*w); t.setAttribute("y",y*h+4); t.setAttribute("text-anchor","middle");
-        t.setAttribute("fill","#fff"); t.setAttribute("font-size","11"); t.setAttribute("font-weight","800");
-        t.textContent = String(index + 1);
-        svg.appendChild(c); svg.appendChild(t);
-      });
+  function fitMapToCoordinates(map, coords, fallbackCenter = DEFAULT_CENTER) {
+    if (!map) return;
+    if (!coords?.length) {
+      map.setCenter(fallbackCenter);
+      map.setZoom(DEFAULT_ZOOM);
+      return;
+    }
+    const bounds = new google.maps.LatLngBounds();
+    coords.forEach(([lng, lat]) => bounds.extend({ lat, lng }));
+    if (coords.length === 1) {
+      map.setCenter({ lat: coords[0][1], lng: coords[0][0] });
+      map.setZoom(17);
+    } else {
+      map.fitBounds(bounds, 36);
     }
   }
 
-  function renderMapDraft() {
-    drawPolygon($("#mapSvg"), state.mapPoints, true);
+  function getGeoRecords() {
+    return dataRepository.load().filter(r =>
+      r.area?.type === "Polygon" &&
+      Array.isArray(r.area.coordinates) &&
+      r.area.coordinates.length >= 3
+    );
+  }
+
+  function clearDraftMapGraphics() {
+    state.postingMarkers.forEach(m => m.setMap(null));
+    state.postingMarkers = [];
+    if (state.postingPolygon) {
+      state.postingPolygon.setMap(null);
+      state.postingPolygon = null;
+    }
+    $("#confirmMapButton").disabled = true;
+    $("#overlapWarning").classList.add("is-hidden");
+  }
+
+  function drawDraftPolygon() {
+    if (!state.postingMap || !window.google?.maps) return;
+
+    state.postingMarkers.forEach(m => m.setMap(null));
+    state.postingMarkers = [];
+    if (state.postingPolygon) state.postingPolygon.setMap(null);
+
+    const path = toLatLngPath(state.mapPoints);
+
+    if (path.length >= 2) {
+      state.postingPolygon = new google.maps.Polygon({
+        paths: path,
+        strokeColor: "#2F6D4F",
+        strokeOpacity: 1,
+        strokeWeight: 3,
+        fillColor: "#2F6D4F",
+        fillOpacity: path.length >= 3 ? 0.22 : 0.08,
+        map: state.postingMap,
+        clickable: false
+      });
+    } else {
+      state.postingPolygon = null;
+    }
+
+    path.forEach((pos, index) => {
+      const marker = new google.maps.Marker({
+        position: pos,
+        map: state.postingMap,
+        label: { text: String(index + 1), color: "#ffffff", fontWeight: "700" },
+        title: `頂点 ${index + 1}`
+      });
+      state.postingMarkers.push(marker);
+    });
+
     $("#confirmMapButton").disabled = state.mapPoints.length < 3;
-    $("#overlapWarning").classList.toggle("is-hidden", state.mapPoints.length < 3 || dataRepository.load().length === 0);
+    updateOverlapWarning();
+  }
+
+  function renderPostingHistoryPolygons() {
+    state.postingHistoryPolygons.forEach(p => p.setMap(null));
+    state.postingHistoryPolygons = [];
+    if (!state.postingMap || !window.google?.maps) return;
+
+    getGeoRecords().forEach((r, index) => {
+      const opacity = Math.max(0.08, 0.18 - index * 0.01);
+      const poly = new google.maps.Polygon({
+        paths: toLatLngPath(r.area.coordinates),
+        strokeColor: "#6F7F72",
+        strokeOpacity: 0.55,
+        strokeWeight: 2,
+        fillColor: "#8BA294",
+        fillOpacity: opacity,
+        map: state.postingMap,
+        clickable: false
+      });
+      state.postingHistoryPolygons.push(poly);
+    });
+  }
+
+  async function initPostingMap() {
+    const statusId = "#postingMapStatus";
+    try {
+      setMapStatus(statusId, "Google Mapsを読み込み中…");
+      await loadGoogleMaps();
+
+      if (!state.postingMap) {
+        state.postingMap = new google.maps.Map($("#postingGoogleMap"), {
+          center: DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          clickableIcons: false,
+          gestureHandling: "greedy"
+        });
+
+        state.postingMap.addListener("click", (e) => {
+          state.mapPoints.push([e.latLng.lng(), e.latLng.lat()]);
+          drawDraftPolygon();
+        });
+      }
+
+      renderPostingHistoryPolygons();
+      drawDraftPolygon();
+      hideMapStatus(statusId);
+
+      if (!state.mapPoints.length) {
+        locateCurrentPosition(false);
+      } else {
+        fitMapToCoordinates(state.postingMap, state.mapPoints);
+      }
+
+      window.setTimeout(() => google.maps.event.trigger(state.postingMap, "resize"), 50);
+    } catch (err) {
+      setMapStatus(statusId, "Google Maps APIキーをconfig.jsに設定すると実地図が表示されます。", true);
+      $("#confirmMapButton").disabled = true;
+    }
+  }
+
+  function locateCurrentPosition(showError = true) {
+    if (!navigator.geolocation || !state.postingMap) {
+      if (showError) alert("この端末では現在地を取得できません。");
+      return;
+    }
+
+    const button = $("#locateButton");
+    button.disabled = true;
+    button.textContent = "取得中…";
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        state.postingMap.setCenter({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        });
+        state.postingMap.setZoom(17);
+        button.disabled = false;
+        button.textContent = "◎ 現在地へ";
+      },
+      () => {
+        button.disabled = false;
+        button.textContent = "◎ 現在地へ";
+        if (showError) alert("現在地を取得できませんでした。位置情報の許可を確認してください。");
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  }
+
+  function pointInPolygon(point, polygon) {
+    const [x, y] = point;
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i];
+      const [xj, yj] = polygon[j];
+      const intersects = ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+      if (intersects) inside = !inside;
+    }
+    return inside;
+  }
+
+  function orientation(a, b, c) {
+    const val = (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1]);
+    if (Math.abs(val) < 1e-12) return 0;
+    return val > 0 ? 1 : 2;
+  }
+
+  function segmentsIntersect(p1, q1, p2, q2) {
+    const o1 = orientation(p1, q1, p2);
+    const o2 = orientation(p1, q1, q2);
+    const o3 = orientation(p2, q2, p1);
+    const o4 = orientation(p2, q2, q1);
+    return o1 !== o2 && o3 !== o4;
+  }
+
+  function polygonsOverlap(a, b) {
+    if (a.some(p => pointInPolygon(p, b)) || b.some(p => pointInPolygon(p, a))) return true;
+    for (let i = 0; i < a.length; i++) {
+      const a1 = a[i], a2 = a[(i + 1) % a.length];
+      for (let j = 0; j < b.length; j++) {
+        const b1 = b[j], b2 = b[(j + 1) % b.length];
+        if (segmentsIntersect(a1, a2, b1, b2)) return true;
+      }
+    }
+    return false;
+  }
+
+  function updateOverlapWarning() {
+    const warning = $("#overlapWarning");
+    if (state.mapPoints.length < 3) {
+      warning.classList.add("is-hidden");
+      return;
+    }
+    const overlapped = getGeoRecords().find(r => polygonsOverlap(state.mapPoints, r.area.coordinates));
+    if (overlapped) {
+      warning.innerHTML = `⚠ この範囲は過去の配布履歴と重なっています<br><small>${overlapped.postingDate}・${formatNumber(overlapped.quantity)}部</small>`;
+      warning.classList.remove("is-hidden");
+    } else {
+      warning.classList.add("is-hidden");
+    }
   }
 
   function renderResultStep() {
@@ -260,8 +497,41 @@
       <div class="confirm-row"><span>チラシ</span><b>${names.flyer(state.draft.flyerId)}</b></div>
       <div class="confirm-row"><span>配布部数</span><b>${formatNumber(state.draft.quantity)}部</b></div>
       <div class="confirm-row"><span>歩数</span><b>${steps}</b></div>`;
-    if (state.draft.area?.normalized) {
-      requestAnimationFrame(() => drawPolygon($("#confirmMapSvg"), state.draft.area.normalized));
+
+    window.setTimeout(renderConfirmMapPreview, 0);
+  }
+
+  async function renderConfirmMapPreview() {
+    if (!state.draft.area?.coordinates?.length) return;
+    try {
+      await loadGoogleMaps();
+
+      if (!state.confirmMap) {
+        state.confirmMap = new google.maps.Map($("#confirmGoogleMap"), {
+          center: DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+          disableDefaultUI: true,
+          gestureHandling: "none",
+          clickableIcons: false
+        });
+      }
+
+      if (state.confirmPolygon) state.confirmPolygon.setMap(null);
+      state.confirmPolygon = new google.maps.Polygon({
+        paths: toLatLngPath(state.draft.area.coordinates),
+        strokeColor: "#2F6D4F",
+        strokeOpacity: 1,
+        strokeWeight: 2,
+        fillColor: "#2F6D4F",
+        fillOpacity: 0.22,
+        map: state.confirmMap,
+        clickable: false
+      });
+
+      fitMapToCoordinates(state.confirmMap, state.draft.area.coordinates);
+      window.setTimeout(() => google.maps.event.trigger(state.confirmMap, "resize"), 50);
+    } catch {
+      // The main map already shows the configuration message.
     }
   }
 
@@ -302,6 +572,7 @@
       saveButton.textContent = "この内容で登録する";
     }, 300);
   }
+
   function renderSuccess() {
     const r = state.lastSavedRecord;
     if (!r) return;
@@ -312,11 +583,8 @@
     const savedAtText = Number.isNaN(savedAt.getTime())
       ? ""
       : savedAt.toLocaleString("ja-JP", {
-          year: "numeric",
-          month: "numeric",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
+          year: "numeric", month: "numeric", day: "numeric",
+          hour: "2-digit", minute: "2-digit"
         });
 
     $("#successMeta").innerHTML =
@@ -332,6 +600,7 @@
       '<b>🚶 ' + formatNumber(p.steps) + '歩</b></div>'
     ).join("");
   }
+
   function renderHistory() {
     const records = dataRepository.load().sort((a,b) => b.postingDate.localeCompare(a.postingDate));
     $("#historyEmpty").classList.toggle("is-hidden", records.length > 0);
@@ -342,25 +611,55 @@
       </article>`).join("");
   }
 
-  function renderMapStatus() {
-    const svg = $("#historyMapSvg");
-    svg.innerHTML = "";
+  async function renderMapStatus() {
     const records = dataRepository.load();
-    const w = svg.clientWidth || svg.parentElement.clientWidth || 300;
-    const h = svg.clientHeight || svg.parentElement.clientHeight || 400;
-
-    records.forEach(r => {
-      if (!r.area?.normalized) return;
-      const poly = document.createElementNS("http://www.w3.org/2000/svg","polygon");
-      poly.setAttribute("points", r.area.normalized.map(([x,y]) => `${x*w},${y*h}`).join(" "));
-      poly.setAttribute("fill","rgba(47,109,79,.18)");
-      poly.setAttribute("stroke","#2F6D4F");
-      poly.setAttribute("stroke-width","2");
-      svg.appendChild(poly);
-    });
-
     $("#mapStatusList").innerHTML = records.map(r => `
       <article class="history-item"><b>${r.postingDate}　${formatNumber(r.quantity)}部</b><small>${names.flyer(r.flyerId)}</small></article>`).join("");
+
+    const statusId = "#historyMapStatus";
+    try {
+      setMapStatus(statusId, "Google Mapsを読み込み中…");
+      await loadGoogleMaps();
+
+      if (!state.historyMap) {
+        state.historyMap = new google.maps.Map($("#historyGoogleMap"), {
+          center: DEFAULT_CENTER,
+          zoom: DEFAULT_ZOOM,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          clickableIcons: false
+        });
+      }
+
+      state.historyPolygons.forEach(p => p.setMap(null));
+      state.historyPolygons = [];
+
+      const geoRecords = getGeoRecords();
+      const allCoords = [];
+
+      geoRecords.forEach((r, index) => {
+        allCoords.push(...r.area.coordinates);
+        const ageOpacity = Math.max(0.08, 0.24 - index * 0.015);
+        const poly = new google.maps.Polygon({
+          paths: toLatLngPath(r.area.coordinates),
+          strokeColor: "#2F6D4F",
+          strokeOpacity: 0.85,
+          strokeWeight: 2,
+          fillColor: "#2F6D4F",
+          fillOpacity: ageOpacity,
+          map: state.historyMap,
+          clickable: false
+        });
+        state.historyPolygons.push(poly);
+      });
+
+      if (allCoords.length) fitMapToCoordinates(state.historyMap, allCoords);
+      hideMapStatus(statusId);
+      window.setTimeout(() => google.maps.event.trigger(state.historyMap, "resize"), 50);
+    } catch {
+      setMapStatus(statusId, "Google Maps APIキーをconfig.jsに設定すると実地図が表示されます。", true);
+    }
   }
 
   function renderAchievements() {
@@ -419,33 +718,32 @@
       if (validateStep1()) navigate("register-map");
     });
 
-    $("#postingMap").addEventListener("click", e => {
-      state.mapPoints.push(normalizedPoint(e, $("#postingMap")));
-      renderMapDraft();
-    });
+    $("#locateButton").addEventListener("click", () => locateCurrentPosition(true));
 
     $("#undoPointButton").addEventListener("click", () => {
       state.mapPoints.pop();
-      renderMapDraft();
+      drawDraftPolygon();
     });
 
     $("#resetMapButton").addEventListener("click", () => {
       state.mapPoints = [];
-      renderMapDraft();
+      clearDraftMapGraphics();
     });
 
     $("#confirmMapButton").addEventListener("click", () => {
       if (state.mapPoints.length < 3) return;
-      state.draft.area = { type:"Polygon", normalized:[...state.mapPoints] };
+      state.draft.area = {
+        type: "Polygon",
+        coordinates: state.mapPoints.map(([lng, lat]) => [lng, lat])
+      };
       navigate("register-result");
     });
 
     $("#quantityInput").addEventListener("input", renderConfirm);
     $("#saveRecordButton").addEventListener("click", saveRecord);
 
-    $("#viewHistoryButton").addEventListener("click", () => {
-      navigate("history");
-    });
+    $("#viewHistoryButton").addEventListener("click", () => navigate("history"));
+
     $("#registerAnotherButton").addEventListener("click", () => {
       resetDraft();
       navigate("register-basic");
