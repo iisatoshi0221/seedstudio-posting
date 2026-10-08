@@ -137,6 +137,12 @@
     return Number(value || 0).toLocaleString("ja-JP");
   }
 
+  function caloriesFromSteps(steps) {
+    return Math.round(
+      Number(steps || 0) * 0.05
+    );
+  }
+
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -3037,6 +3043,16 @@
           0
         );
 
+    const totalCalories =
+      caloriesFromSteps(
+        totalSteps
+      );
+
+    const monthCalories =
+      caloriesFromSteps(
+        monthSteps
+      );
+
     const totalQuantity =
       records.reduce(
         (total, record) =>
@@ -3116,11 +3132,25 @@
         );
     }
 
+    if ($("#achievementMonthCalories")) {
+      $("#achievementMonthCalories").textContent =
+        formatNumber(
+          monthCalories
+        );
+    }
+
     if ($("#achievementTotalSteps")) {
       $("#achievementTotalSteps").textContent =
         `${formatNumber(
           totalSteps
         )}歩`;
+    }
+
+    if ($("#achievementTotalCalories")) {
+      $("#achievementTotalCalories").textContent =
+        `約${formatNumber(
+          totalCalories
+        )}kcal`;
     }
 
     if ($("#achievementCount")) {
@@ -3162,6 +3192,81 @@
           progress
         )}%`;
     }
+
+    const dailyList =
+      $("#achievementDailyList");
+
+    const dailyEmpty =
+      $("#achievementDailyEmpty");
+
+    const dailyRecords =
+      [...records].sort(
+        (a, b) =>
+          (b.postingDate || "")
+            .localeCompare(
+              a.postingDate || ""
+            )
+      );
+
+    if (dailyList) {
+      dailyList.innerHTML =
+        dailyRecords
+          .map(
+            (record) => {
+              const participant =
+                (
+                  record.participants ||
+                  []
+                ).find(
+                  (item) =>
+                    item.participantId ===
+                    participantId
+                );
+
+              const steps =
+                Number(
+                  participant?.steps ||
+                  0
+                );
+
+              const calories =
+                caloriesFromSteps(
+                  steps
+                );
+
+              return `
+                <article class="history-item">
+                  <b>
+                    ${escapeHtml(
+                      record.postingDate
+                    )}
+                  </b>
+
+                  <small
+                    style="
+                      display:block;
+                      margin-top:5px;
+                    "
+                  >
+                    👣 ${formatNumber(
+                      steps
+                    )}歩
+                    　
+                    🔥 約${formatNumber(
+                      calories
+                    )}kcal
+                  </small>
+                </article>
+              `;
+            }
+          )
+          .join("");
+    }
+
+    dailyEmpty?.classList.toggle(
+      "is-hidden",
+      dailyRecords.length > 0
+    );
 
     if ($("#milestoneRow")) {
       $("#milestoneRow").innerHTML =
