@@ -1,3 +1,3 @@
 window.SEEDSTUDIO_CONFIG = {
-  googleMapsApiKey: "PASTE_YOUR_GOOGLE_MAPS_API_KEY_HERE"
+  googleMapsApiKey: "AIzaSyCx6IANGieklxXKPdF0VHoM1ZeuARoh3T8"
 };
