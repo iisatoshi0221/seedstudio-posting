@@ -10,7 +10,8 @@ import {
   getDocs,
   doc,
   getDoc,
-  setDoc
+  setDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 import {
@@ -30,6 +31,9 @@ import {
 // ============================================================
 // SeedStudio Posting
 // Firebase bridge
+//
+// Phase 2
+// Posting participant management
 // ============================================================
 
 
@@ -114,6 +118,30 @@ const googleProvider =
 googleProvider.setCustomParameters({
   prompt: "select_account"
 });
+
+
+// ============================================================
+// Date helpers
+// ============================================================
+
+function todayIso() {
+  const now =
+    new Date();
+
+  const local =
+    new Date(
+      now.getTime() -
+      now.getTimezoneOffset() *
+        60000
+    );
+
+  return local
+    .toISOString()
+    .slice(
+      0,
+      10
+    );
+}
 
 
 // ============================================================
@@ -594,6 +622,139 @@ window.SeedStudioAuth = {
 
 
 // ============================================================
+// User master helpers
+//
+// SSS共通 users コレクションを正本とする。
+// Posting側に氏名をコピーしない。
+// ============================================================
+
+function userMasterIsCurrentlyActive(
+  data
+) {
+  if (
+    !data ||
+    data.active !== true
+  ) {
+    return false;
+  }
+
+  const today =
+    todayIso();
+
+  /*
+   * startDate がある場合は
+   * 利用開始日以降のみ対象。
+   */
+  if (
+    typeof data.startDate ===
+      "string" &&
+    data.startDate &&
+    data.startDate >
+      today
+  ) {
+    return false;
+  }
+
+  /*
+   * endDate がある場合は
+   * 終了日を過ぎたら対象外。
+   */
+  if (
+    typeof data.endDate ===
+      "string" &&
+    data.endDate &&
+    data.endDate <
+      today
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+
+function normalizeActiveUser(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data();
+
+  const personId =
+    data.userId ||
+    documentSnapshot.id;
+
+  return {
+    personId,
+
+    userId:
+      data.userId ||
+      documentSnapshot.id,
+
+    name:
+      data.name ||
+      personId,
+
+    phase:
+      "ACTIVE",
+
+    phaseLabel:
+      "利用中",
+
+    source:
+      "users",
+
+    active:
+      data.active === true,
+
+    startDate:
+      data.startDate ||
+      null,
+
+    endDate:
+      data.endDate ??
+      null
+  };
+}
+
+
+// ============================================================
+// Posting participant helpers
+// ============================================================
+
+function normalizePostingParticipant(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data();
+
+  return {
+    personId:
+      data.personId ||
+      documentSnapshot.id,
+
+    enabled:
+      data.enabled === true,
+
+    addedAt:
+      data.addedAt ||
+      null,
+
+    addedByUid:
+      data.addedByUid ||
+      null,
+
+    updatedAt:
+      data.updatedAt ||
+      null,
+
+    updatedByUid:
+      data.updatedByUid ||
+      null
+  };
+}
+
+
+// ============================================================
 // Firestore bridge
 // ============================================================
 
@@ -631,15 +792,6 @@ window.SeedStudioFirestore = {
           ...documentSnapshot.data()
         };
 
-        /*
-         * Firestore形式
-         * {lng,lat}
-         *
-         * ↓
-         *
-         * app.js形式
-         * [lng,lat]
-         */
         return decodePostingRecord(
           rawRecord
         );
@@ -674,15 +826,6 @@ window.SeedStudioFirestore = {
     }
 
 
-    /*
-     * app.js形式
-     * [lng,lat]
-     *
-     * ↓
-     *
-     * Firestore形式
-     * {lng,lat}
-     */
     const encodedRecord =
       encodePostingRecord(
         record
@@ -717,13 +860,333 @@ window.SeedStudioFirestore = {
     );
 
 
-    /*
-     * app.jsへ返すときは
-     * 再び [lng,lat] 形式へ戻す。
-     */
     return decodePostingRecord(
       payload
     );
+  },
+
+
+  // ==========================================================
+  // Phase 2
+  // SSS user master
+  // ==========================================================
+
+  // ------------------------------------------------------------
+  // Load currently active formal users
+  //
+  // 現時点では SSS の users のみ。
+  //
+  // 将来、体験フェーズのPersonの正本が確定したら、
+  // phase:"TRIAL" のデータをここへ合流する。
+  // ------------------------------------------------------------
+
+  async listActiveUsers() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "users"
+        )
+      );
+
+    return snapshot.docs
+      .filter(
+        (
+          documentSnapshot
+        ) =>
+          userMasterIsCurrentlyActive(
+            documentSnapshot.data()
+          )
+      )
+      .map(
+        normalizeActiveUser
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          String(
+            a.name
+          ).localeCompare(
+            String(
+              b.name
+            ),
+            "ja"
+          )
+      );
+  },
+
+
+  // ==========================================================
+  // Posting participant configuration
+  // ==========================================================
+
+  // ------------------------------------------------------------
+  // Load Posting participant settings
+  // ------------------------------------------------------------
+
+  async listPostingParticipants() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "postingParticipants"
+        )
+      );
+
+    return snapshot.docs.map(
+      normalizePostingParticipant
+    );
+  },
+
+
+  // ------------------------------------------------------------
+  // Load all candidates for participant management
+  //
+  // app.jsから見ると、
+  //
+  // {
+  //   personId,
+  //   name,
+  //   phase,
+  //   phaseLabel,
+  //   postingEnabled
+  // }
+  //
+  // の共通形式になる。
+  // ------------------------------------------------------------
+
+  async listPostingParticipantCandidates() {
+    const [
+      users,
+      postingSettings
+    ] =
+      await Promise.all([
+        this.listActiveUsers(),
+        this.listPostingParticipants()
+      ]);
+
+
+    const settingMap =
+      new Map(
+        postingSettings.map(
+          (
+            setting
+          ) => [
+            setting.personId,
+            setting
+          ]
+        )
+      );
+
+
+    return users.map(
+      (
+        person
+      ) => {
+        const setting =
+          settingMap.get(
+            person.personId
+          );
+
+        return {
+          ...person,
+
+          postingEnabled:
+            setting
+              ?.enabled ===
+            true
+        };
+      }
+    );
+  },
+
+
+  // ------------------------------------------------------------
+  // Load only enabled Posting participants
+  //
+  // 通常の「一緒に参加した人」欄では、
+  // 基本的にこの結果だけを使う。
+  // ------------------------------------------------------------
+
+  async listEnabledPostingParticipants() {
+    const candidates =
+      await this
+        .listPostingParticipantCandidates();
+
+    return candidates.filter(
+      (
+        person
+      ) =>
+        person.postingEnabled ===
+        true
+    );
+  },
+
+
+  // ------------------------------------------------------------
+  // Enable / disable Posting participant
+  //
+  // Posting側では名前・利用状態を保持しない。
+  // personId と Posting参加対象かどうかだけを保持する。
+  // ------------------------------------------------------------
+
+  async setPostingParticipantEnabled(
+    personId,
+    enabled
+  ) {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+
+    if (
+      typeof personId !==
+        "string" ||
+      !personId.trim()
+    ) {
+      throw new Error(
+        "personId is required."
+      );
+    }
+
+
+    if (
+      typeof enabled !==
+      "boolean"
+    ) {
+      throw new Error(
+        "enabled must be boolean."
+      );
+    }
+
+
+    const normalizedPersonId =
+      personId.trim();
+
+
+    const reference =
+      doc(
+        db,
+        "postingParticipants",
+        normalizedPersonId
+      );
+
+
+    const existing =
+      await getDoc(
+        reference
+      );
+
+
+    /*
+     * 初回追加
+     */
+    if (
+      !existing.exists()
+    ) {
+      const payload = {
+        personId:
+          normalizedPersonId,
+
+        enabled,
+
+        addedAt:
+          serverTimestamp(),
+
+        addedByUid:
+          user.uid,
+
+        updatedAt:
+          serverTimestamp(),
+
+        updatedByUid:
+          user.uid
+      };
+
+
+      await setDoc(
+        reference,
+        payload
+      );
+
+
+      return {
+        personId:
+          normalizedPersonId,
+
+        enabled
+      };
+    }
+
+
+    /*
+     * 既存設定の変更
+     *
+     * addedAt / addedByUid は保持。
+     */
+    const existingData =
+      existing.data();
+
+
+    const payload = {
+      personId:
+        normalizedPersonId,
+
+      enabled,
+
+      addedAt:
+        existingData.addedAt ||
+        serverTimestamp(),
+
+      addedByUid:
+        existingData.addedByUid ||
+        user.uid,
+
+      updatedAt:
+        serverTimestamp(),
+
+      updatedByUid:
+        user.uid
+    };
+
+
+    await setDoc(
+      reference,
+      payload
+    );
+
+
+    return {
+      personId:
+        normalizedPersonId,
+
+      enabled
+    };
   }
 };
 
@@ -742,6 +1205,9 @@ console.log(
       !!auth.currentUser,
 
     coordinateFormat:
-      "Firestore:{lng,lat} / App:[lng,lat]"
+      "Firestore:{lng,lat} / App:[lng,lat]",
+
+    postingParticipants:
+      "Phase 2 bridge enabled"
   }
 );
