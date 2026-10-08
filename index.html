@@ -1255,6 +1255,22 @@
               今月のポスティング
             </small>
 
+            <div
+              style="
+                margin-top:10px;
+                font-size:14px;
+                font-weight:700;
+              "
+            >
+              🔥 約
+              <span id="achievementMonthCalories">0</span>
+              kcal
+            </div>
+
+            <small>
+              消費カロリー（目安）
+            </small>
+
           </div>
 
 
@@ -1272,6 +1288,23 @@
 
               <small>
                 累計歩数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                🔥
+              </div>
+
+              <b id="achievementTotalCalories">
+                約0kcal
+              </b>
+
+              <small>
+                累計消費カロリー（目安）
               </small>
 
             </div>
@@ -1328,6 +1361,50 @@
             </div>
 
           </div>
+
+
+          <section
+            class="card"
+            style="
+              margin-top:18px;
+              margin-bottom:18px;
+            "
+          >
+
+            <h3
+              style="
+                margin-top:0;
+                margin-bottom:6px;
+              "
+            >
+              日別の活動
+            </h3>
+
+            <small
+              style="
+                display:block;
+                margin-bottom:12px;
+                color:#6E746F;
+              "
+            >
+              歩数から 1歩＝0.05kcal で算出した目安です
+            </small>
+
+            <div
+              id="achievementDailyList"
+              class="history-list"
+            ></div>
+
+            <div
+              id="achievementDailyEmpty"
+              class="empty-state is-hidden"
+            >
+              👣
+              <br>
+              まだポスティング記録がありません
+            </div>
+
+          </section>
 
 
           <div class="card progress-goal">
@@ -1412,7 +1489,7 @@
   ></script>
 
   <script
-    src="./app.js?v=20261009-1"
+    src="./app.js?v=20261009-2"
     defer
   ></script>
 
