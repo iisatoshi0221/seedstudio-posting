@@ -481,6 +481,10 @@
       } finally {
         state.participantLoading = false;
         renderParticipantLoadingStates();
+
+        // 読み込み完了後に候補一覧を再描画する。
+        // これにより、検索操作をしなくても未登録利用者が最初から表示される。
+        renderParticipantUI();
       }
     },
 
@@ -944,6 +948,15 @@
     }
 
     syncStep1();
+
+    // 管理画面を開くたびに検索条件をクリアし、
+    // 未登録利用者を最初から一覧表示する。
+    const searchInput =
+      $("#postingParticipantSearch");
+
+    if (searchInput) {
+      searchInput.value = "";
+    }
 
     navigate(
       "participant-manager"
