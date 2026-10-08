@@ -42,37 +42,65 @@
   const milestoneSteps = [10000, 50000, 100000, 250000, 500000];
 
   const dataRepository = {
-    load() {
+    cache: [],
+    mode: "loading",
+
+    loadLocal() {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        const demo = [{
-          id: "DEMO-20261007",
-          postingDate: "2026-10-07",
-          staffId: "S0001",
-          flyerId: "F0001",
-          quantity: 180,
-          participants: [
-            { participantId: "U0001", steps: 4820 },
-            { participantId: "U0002", steps: 5130 }
-          ],
-          area: {
-            type: "Polygon",
-            normalized: [[0.18,0.24],[0.54,0.18],[0.71,0.55],[0.38,0.69],[0.17,0.51]]
-          },
-          createdAt: new Date().toISOString()
-        }];
-        this.save(demo);
-        return demo;
-      }
+      if (!raw) return [];
       try { return JSON.parse(raw); } catch { return []; }
     },
-    save(records) {
+
+    saveLocal(records) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
     },
-    add(record) {
-      const records = this.load();
-      records.push(record);
-      this.save(records);
+
+    async waitForFirestoreBridge(timeoutMs = 10000) {
+      const started = Date.now();
+      while (!window.SeedStudioFirestore) {
+        if (Date.now() - started > timeoutMs) {
+          throw new Error("Firestore bridge timeout");
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return window.SeedStudioFirestore;
+    },
+
+    async init() {
+      try {
+        const firestore = await this.waitForFirestoreBridge();
+        this.cache = await firestore.listPostingRecords();
+        this.cache.sort((a, b) => (b.postingDate || "").localeCompare(a.postingDate || ""));
+        this.mode = "firestore";
+        this.saveLocal(this.cache);
+      } catch (error) {
+        console.warn("Firestore unavailable. Falling back to localStorage.", error);
+        this.cache = this.loadLocal();
+        this.mode = "local";
+      }
+    },
+
+    load() {
+      return [...this.cache];
+    },
+
+    async add(record) {
+      if (this.mode === "firestore") {
+        try {
+          const firestore = await this.waitForFirestoreBridge();
+          await firestore.savePostingRecord(record);
+          this.cache.push(record);
+          this.saveLocal(this.cache);
+          return "firestore";
+        } catch (error) {
+          console.warn("Firestore save failed. Saving locally.", error);
+          this.mode = "local";
+        }
+      }
+
+      this.cache.push(record);
+      this.saveLocal(this.cache);
+      return "local";
     }
   };
 
@@ -535,7 +563,7 @@
     }
   }
 
-  function saveRecord() {
+  async function saveRecord() {
     const saveButton = $("#saveRecordButton");
     if (saveButton.disabled) return;
     saveButton.disabled = true;
@@ -563,7 +591,8 @@
       createdAt: new Date().toISOString()
     };
 
-    dataRepository.add(record);
+    const storageMode = await dataRepository.add(record);
+    record.storageMode = storageMode;
     state.lastSavedRecord = record;
     navigate("success");
 
@@ -589,6 +618,9 @@
 
     $("#successMeta").innerHTML =
       '<div class="confirm-row"><span>保存状態</span><b>✓ 保存済み</b></div>' +
+      '<div class="confirm-row"><span>保存先</span><b>' +
+        (r.storageMode === "firestore" ? "Firestore（共有）" : "この端末（一時保存）") +
+      '</b></div>' +
       '<div class="confirm-row"><span>配布日</span><b>' + r.postingDate + '</b></div>' +
       '<div class="confirm-row"><span>担当職員</span><b>' + names.staff(r.staffId) + '</b></div>' +
       '<div class="confirm-row"><span>チラシ</span><b>' + names.flyer(r.flyerId) + '</b></div>' +
@@ -752,13 +784,20 @@
     $("#achievementParticipantSelect").addEventListener("change", renderAchievements);
   }
 
-  function init() {
+  async function init() {
     renderMasters();
     resetDraft();
     bindEvents();
+    await dataRepository.init();
     renderHome();
     navigate("home");
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", () => {
+    init().catch((error) => {
+      console.error("SeedStudio Posting initialization failed.", error);
+      renderHome();
+      navigate("home");
+    });
+  });
 })();
