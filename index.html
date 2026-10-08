@@ -1,276 +1,1421 @@
 <!doctype html>
 <html lang="ja">
+
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2F6D4F">
-  <title>SeedStudio Posting</title>
-  <link rel="stylesheet" href="./styles.css">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta
+    name="theme-color"
+    content="#2F6D4F"
+  >
+
+  <title>
+    SeedStudio Posting
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="./styles.css?v=20261008-3"
+  >
 </head>
+
+
 <body>
-  <div id="app" class="app-shell">
+
+  <div
+    id="app"
+    class="app-shell"
+  >
+
+    <!-- ====================================================== -->
+    <!-- Header                                                 -->
+    <!-- ====================================================== -->
+
     <header class="app-header">
-      <button id="backButton" class="icon-button is-hidden" type="button" aria-label="戻る">←</button>
-      <h1 id="pageTitle" class="app-header__title">SeedStudio Posting</h1>
+
+      <button
+        id="backButton"
+        class="icon-button is-hidden"
+        type="button"
+        aria-label="戻る"
+      >
+        ←
+      </button>
+
+      <h1
+        id="pageTitle"
+        class="app-header__title"
+      >
+        SeedStudio Posting
+      </h1>
+
       <div class="app-header__action"></div>
+
     </header>
 
+
     <main class="page">
-      <section class="view is-active" data-view="home">
-        <div class="brand-header">
-          <div class="brand-mark">👣🌱</div>
-          <div class="brand-header__name">SeedStudio Posting</div>
-          <div class="brand-header__tagline">歩いて届ける、未来のたね。</div>
-        </div>
+
+
+      <!-- ==================================================== -->
+      <!-- HOME                                                 -->
+      <!-- ==================================================== -->
 
       <section
-  id="authCard"
-  class="card"
-  style="padding:14px 16px; margin-bottom:16px;"
->
+        class="view is-active"
+        data-view="home"
+      >
 
-  <div id="authLoading">
-    <strong>ログイン状態を確認しています...</strong>
-  </div>
+        <div class="brand-header">
 
+          <div class="brand-mark">
+            👣🌱
+          </div>
 
-  <div
-    id="authSignedOut"
-    class="is-hidden"
-  >
+          <div class="brand-header__name">
+            SeedStudio Posting
+          </div>
 
-    <strong>
-      SeedStudio 職員ログイン
-    </strong>
+          <div class="brand-header__tagline">
+            歩いて届ける、未来のたね。
+          </div>
 
-    <small
-      style="
-        display:block;
-        margin-top:5px;
-        color:#6E746F;
-      "
-    >
-      配布実績を共有するため、
-      Googleアカウントでログインしてください。
-    </small>
-
-    <button
-      id="googleLoginButton"
-      class="button button--primary"
-      type="button"
-    >
-      Googleでログイン
-    </button>
-
-  </div>
+        </div>
 
 
-  <div
-    id="authSignedIn"
-    class="is-hidden"
-  >
+        <!-- ================================================== -->
+        <!-- Authentication                                     -->
+        <!-- ================================================== -->
 
-    <strong id="authUserName">
-      ログイン中
-    </strong>
+        <section
+          id="authCard"
+          class="card"
+          style="
+            padding:14px 16px;
+            margin-bottom:16px;
+          "
+        >
 
-    <small
-      id="authUserEmail"
-      style="
-        display:block;
-        margin-top:4px;
-        color:#6E746F;
-      "
-    ></small>
+          <div id="authLoading">
 
+            <strong>
+              ログイン状態を確認しています...
+            </strong>
 
-    <div
-      id="authPermissionStatus"
-      style="
-        margin-top:8px;
-        font-size:13px;
-        font-weight:700;
-      "
-    ></div>
+          </div>
 
 
-    <button
-      id="googleLogoutButton"
-      class="button button--secondary"
-      type="button"
-    >
-      ログアウト
-    </button>
+          <div
+            id="authSignedOut"
+            class="is-hidden"
+          >
 
-  </div>
+            <strong>
+              SeedStudio 職員ログイン
+            </strong>
 
-</section>
-        
+            <small
+              style="
+                display:block;
+                margin-top:5px;
+                color:#6E746F;
+              "
+            >
+              配布実績を共有するため、
+              Googleアカウントでログインしてください。
+            </small>
+
+
+            <button
+              id="googleLoginButton"
+              class="button button--primary"
+              type="button"
+            >
+              Googleでログイン
+            </button>
+
+          </div>
+
+
+          <div
+            id="authSignedIn"
+            class="is-hidden"
+          >
+
+            <strong id="authUserName">
+              ログイン中
+            </strong>
+
+            <small
+              id="authUserEmail"
+              style="
+                display:block;
+                margin-top:4px;
+                color:#6E746F;
+              "
+            ></small>
+
+
+            <div
+              id="authPermissionStatus"
+              style="
+                margin-top:8px;
+                font-size:13px;
+                font-weight:700;
+              "
+            ></div>
+
+
+            <button
+              id="googleLogoutButton"
+              class="button button--secondary"
+              type="button"
+            >
+              ログアウト
+            </button>
+
+          </div>
+
+        </section>
+
+
+        <!-- ================================================== -->
+        <!-- Home menu                                          -->
+        <!-- ================================================== -->
 
         <div class="home-menu">
-          <button class="home-menu-card home-menu-card--primary" data-nav="register-basic" type="button">
-            <span class="home-menu-card__icon">＋</span>
-            <span><strong>配布実績を登録</strong><small>今日のポスティングを登録</small></span>
-            <span>›</span>
+
+          <button
+            class="
+              home-menu-card
+              home-menu-card--primary
+            "
+            data-nav="register-basic"
+            type="button"
+          >
+
+            <span class="home-menu-card__icon">
+              ＋
+            </span>
+
+            <span>
+
+              <strong>
+                配布実績を登録
+              </strong>
+
+              <small>
+                今日のポスティングを登録
+              </small>
+
+            </span>
+
+            <span>
+              ›
+            </span>
+
           </button>
-          <button class="home-menu-card" data-nav="map" type="button">
-            <span class="home-menu-card__icon">🗺</span>
-            <span><strong>配布状況を見る</strong><small>どこに配ったか確認</small></span>
-            <span>›</span>
+
+
+          <button
+            class="home-menu-card"
+            data-nav="map"
+            type="button"
+          >
+
+            <span class="home-menu-card__icon">
+              🗺
+            </span>
+
+            <span>
+
+              <strong>
+                配布状況を見る
+              </strong>
+
+              <small>
+                どこに配ったか確認
+              </small>
+
+            </span>
+
+            <span>
+              ›
+            </span>
+
           </button>
-          <button class="home-menu-card" data-nav="achievements" type="button">
-            <span class="home-menu-card__icon">🌱</span>
-            <span><strong>みんなの成果</strong><small>歩数や参加回数を見る</small></span>
-            <span>›</span>
+
+
+          <button
+            class="home-menu-card"
+            data-nav="achievements"
+            type="button"
+          >
+
+            <span class="home-menu-card__icon">
+              🌱
+            </span>
+
+            <span>
+
+              <strong>
+                みんなの成果
+              </strong>
+
+              <small>
+                歩数や参加回数を見る
+              </small>
+
+            </span>
+
+            <span>
+              ›
+            </span>
+
           </button>
-          <button class="home-menu-card" data-nav="history" type="button">
-            <span class="home-menu-card__icon">📋</span>
-            <span><strong>配布履歴</strong><small>過去の記録を確認</small></span>
-            <span>›</span>
+
+
+          <button
+            class="home-menu-card"
+            data-nav="history"
+            type="button"
+          >
+
+            <span class="home-menu-card__icon">
+              📋
+            </span>
+
+            <span>
+
+              <strong>
+                配布履歴
+              </strong>
+
+              <small>
+                過去の記録を確認
+              </small>
+
+            </span>
+
+            <span>
+              ›
+            </span>
+
           </button>
+
         </div>
+
+
+        <!-- ================================================== -->
+        <!-- Monthly summary                                    -->
+        <!-- ================================================== -->
 
         <section class="card summary-card">
+
           <div class="summary-card__header">
-            <h2>今月のPosting</h2><span id="summaryMonth"></span>
+
+            <h2>
+              今月のPosting
+            </h2>
+
+            <span id="summaryMonth"></span>
+
           </div>
+
+
           <div class="metric-grid metric-grid--three">
-            <div class="metric-card"><div>📮</div><b id="homeTotalQuantity">0部</b><small>配布部数</small></div>
-            <div class="metric-card"><div>🚶</div><b id="homeTotalSteps">0歩</b><small>歩数</small></div>
-            <div class="metric-card"><div>🌱</div><b id="homeParticipationCount">0回</b><small>参加回数</small></div>
+
+            <div class="metric-card">
+
+              <div>
+                📮
+              </div>
+
+              <b id="homeTotalQuantity">
+                0部
+              </b>
+
+              <small>
+                配布部数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                🚶
+              </div>
+
+              <b id="homeTotalSteps">
+                0歩
+              </b>
+
+              <small>
+                歩数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                🌱
+              </div>
+
+              <b id="homeParticipationCount">
+                0回
+              </b>
+
+              <small>
+                参加回数
+              </small>
+
+            </div>
+
           </div>
+
         </section>
+
       </section>
 
-      <section class="view" data-view="register-basic">
-        <div class="stepper">
-          <div class="stepper__item is-active"><span>1</span><small>基本情報</small></div><i></i>
-          <div class="stepper__item"><span>2</span><small>配布範囲</small></div><i></i>
-          <div class="stepper__item"><span>3</span><small>今日の成果</small></div>
-        </div>
-        <section class="section">
-          <h2>今日、誰と何を配りましたか？</h2>
-          <label class="form-field">配布日<input id="postingDate" class="input" type="date"></label>
-          <label class="form-field">担当職員<select id="staffSelect" class="select"></select></label>
-          <div class="form-field">
-            <span>一緒に参加した人</span>
-            <small>複数選択できます</small>
-            <div id="participantList" class="checkbox-list"></div>
-            <div id="participantError" class="field-error is-hidden">一緒に参加した人を1名以上選んでください</div>
-          </div>
-          <label class="form-field">配布したチラシ<select id="flyerSelect" class="select"></select></label>
-          <button id="goToMapButton" class="button button--primary" type="button">次へ</button>
-        </section>
-      </section>
 
-      <section class="view" data-view="register-map">
-        <div class="stepper">
-          <div class="stepper__item is-done"><span>1</span><small>基本情報</small></div><i class="is-done"></i>
-          <div class="stepper__item is-active"><span>2</span><small>配布範囲</small></div><i></i>
-          <div class="stepper__item"><span>3</span><small>今日の成果</small></div>
-        </div>
-        <section class="section">
-          <h2>配った範囲を囲んでください</h2>
-          <p class="help">道路や住宅ブロックに沿って、3か所以上タップします。</p>
-          <div id="postingMap" class="map-container">
-            <div id="postingGoogleMap" class="google-map"></div>
-            <div id="postingMapStatus" class="map-status">Google Mapsを読み込み中…</div>
-            <button id="locateButton" class="map-locate-button" type="button">◎ 現在地へ</button>
-          </div>
-          <div id="overlapWarning" class="alert-banner is-hidden">⚠ この付近には最近の配布履歴があります</div>
-          <div class="two-buttons">
-            <button id="undoPointButton" class="button button--secondary" type="button">↩ 1つ戻す</button>
-            <button id="resetMapButton" class="button button--secondary" type="button">やり直す</button>
-          </div>
-          <button id="confirmMapButton" class="button button--primary" type="button" disabled>この範囲で確定</button>
-        </section>
-      </section>
+      <!-- ==================================================== -->
+      <!-- REGISTER STEP 1                                      -->
+      <!-- ==================================================== -->
 
-      <section class="view" data-view="register-result">
+      <section
+        class="view"
+        data-view="register-basic"
+      >
+
         <div class="stepper">
-          <div class="stepper__item is-done"><span>1</span><small>基本情報</small></div><i class="is-done"></i>
-          <div class="stepper__item is-done"><span>2</span><small>配布範囲</small></div><i class="is-done"></i>
-          <div class="stepper__item is-active"><span>3</span><small>今日の成果</small></div>
+
+          <div class="stepper__item is-active">
+            <span>1</span>
+            <small>基本情報</small>
+          </div>
+
+          <i></i>
+
+          <div class="stepper__item">
+            <span>2</span>
+            <small>配布範囲</small>
+          </div>
+
+          <i></i>
+
+          <div class="stepper__item">
+            <span>3</span>
+            <small>今日の成果</small>
+          </div>
+
         </div>
+
+
         <section class="section">
-          <h2>今日の成果を入力しよう！</h2>
-          <label class="form-field">📮 配布部数
-            <div class="number-input"><input id="quantityInput" class="input" type="number" min="1" inputmode="numeric" placeholder="例：180"><span>部</span></div>
+
+          <h2>
+            今日、誰と何を配りましたか？
+          </h2>
+
+
+          <label class="form-field">
+
+            配布日
+
+            <input
+              id="postingDate"
+              class="input"
+              type="date"
+            >
+
           </label>
+
+
+          <label class="form-field">
+
+            担当職員
+
+            <select
+              id="staffSelect"
+              class="select"
+            ></select>
+
+          </label>
+
+
+          <!-- ================================================ -->
+          <!-- Posting participants                             -->
+          <!-- ================================================ -->
+
           <div class="form-field">
-            <span>🚶 今日の歩数</span>
-            <div id="participantSteps" class="participant-steps"></div>
+
+            <span>
+              一緒に参加した人
+            </span>
+
+            <small>
+              複数選択できます
+            </small>
+
+
+            <!--
+              app.js がここへ
+              Posting参加対象者だけを表示する。
+            -->
+
+            <div
+              id="participantListLoading"
+              class="is-hidden"
+              style="
+                padding:12px 0;
+                color:#6E746F;
+                font-size:14px;
+              "
+            >
+              参加者を読み込んでいます...
+            </div>
+
+
+            <div
+              id="participantList"
+              class="checkbox-list"
+            ></div>
+
+
+            <div
+              id="participantListEmpty"
+              class="is-hidden"
+              style="
+                margin-top:10px;
+                padding:14px;
+                border-radius:12px;
+                background:#F5F4EE;
+                color:#6E746F;
+                font-size:14px;
+                line-height:1.6;
+              "
+            >
+              ポスティング参加者が
+              まだ登録されていません。
+            </div>
+
+
+            <div
+              id="participantError"
+              class="field-error is-hidden"
+            >
+              一緒に参加した人を
+              1名以上選んでください
+            </div>
+
+
+            <!-- ============================================== -->
+            <!-- Add / manage Posting participants              -->
+            <!-- ============================================== -->
+
+            <button
+              id="addPostingParticipantButton"
+              class="button button--secondary"
+              type="button"
+              style="
+                margin-top:12px;
+              "
+            >
+              ＋ ポスティング参加者を追加
+            </button>
+
           </div>
+
+
+          <label class="form-field">
+
+            配布したチラシ
+
+            <select
+              id="flyerSelect"
+              class="select"
+            ></select>
+
+          </label>
+
+
+          <button
+            id="goToMapButton"
+            class="button button--primary"
+            type="button"
+          >
+            次へ
+          </button>
+
+        </section>
+
+      </section>
+
+
+      <!-- ==================================================== -->
+      <!-- POSTING PARTICIPANT MANAGEMENT                       -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="participant-manager"
+      >
+
+        <section class="section">
+
+          <h2>
+            ポスティング参加者
+          </h2>
+
+          <p class="help">
+            ポスティングに参加する人だけを
+            登録画面に表示できます。
+          </p>
+
+
+          <!-- ================================================ -->
+          <!-- Current Posting participants                     -->
+          <!-- ================================================ -->
+
+          <section
+            class="card"
+            style="
+              margin-bottom:18px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:10px;
+                margin-bottom:10px;
+              "
+            >
+
+              <div>
+
+                <strong>
+                  現在の参加者
+                </strong>
+
+                <small
+                  style="
+                    display:block;
+                    margin-top:3px;
+                    color:#6E746F;
+                  "
+                >
+                  配布実績の参加者欄に表示されます
+                </small>
+
+              </div>
+
+
+              <span
+                id="postingParticipantCount"
+                style="
+                  flex:none;
+                  font-size:13px;
+                  font-weight:700;
+                  color:#2F6D4F;
+                "
+              >
+                0名
+              </span>
+
+            </div>
+
+
+            <div
+              id="postingParticipantCurrentLoading"
+              class="is-hidden"
+              style="
+                padding:10px 0;
+                color:#6E746F;
+                font-size:14px;
+              "
+            >
+              読み込んでいます...
+            </div>
+
+
+            <div
+              id="postingParticipantCurrentList"
+              class="checkbox-list"
+            ></div>
+
+
+            <div
+              id="postingParticipantCurrentEmpty"
+              class="is-hidden"
+              style="
+                padding:14px 0;
+                color:#6E746F;
+                font-size:14px;
+                line-height:1.6;
+              "
+            >
+              まだ参加者はいません。
+              下の利用者一覧から追加できます。
+            </div>
+
+          </section>
+
+
+          <!-- ================================================ -->
+          <!-- Add candidate                                    -->
+          <!-- ================================================ -->
+
+          <div class="form-field">
+
+            <span>
+              参加者を追加
+            </span>
+
+            <small>
+              SSSの利用者データから選択します
+            </small>
+
+
+            <input
+              id="postingParticipantSearch"
+              class="input"
+              type="search"
+              autocomplete="off"
+              placeholder="名前で検索"
+              aria-label="利用者を名前で検索"
+            >
+
+          </div>
+
+
+          <!-- ================================================ -->
+          <!-- Status explanation                               -->
+          <!-- ================================================ -->
+
+          <div
+            style="
+              display:flex;
+              flex-wrap:wrap;
+              gap:8px;
+              margin:-2px 0 14px;
+            "
+          >
+
+            <span
+              style="
+                display:inline-flex;
+                align-items:center;
+                padding:5px 9px;
+                border-radius:999px;
+                background:#E8F3EC;
+                color:#2F6D4F;
+                font-size:12px;
+                font-weight:700;
+              "
+            >
+              利用中
+            </span>
+
+
+            <span
+              style="
+                display:inline-flex;
+                align-items:center;
+                padding:5px 9px;
+                border-radius:999px;
+                background:#FFF1D8;
+                color:#8A6020;
+                font-size:12px;
+                font-weight:700;
+              "
+            >
+              体験中
+            </span>
+
+          </div>
+
+
+          <!-- ================================================ -->
+          <!-- Candidate loading                                -->
+          <!-- ================================================ -->
+
+          <div
+            id="postingParticipantCandidateLoading"
+            class="is-hidden"
+            style="
+              padding:18px 0;
+              text-align:center;
+              color:#6E746F;
+              font-size:14px;
+            "
+          >
+            SSSの利用者データを
+            読み込んでいます...
+          </div>
+
+
+          <!-- ================================================ -->
+          <!-- Candidate error                                  -->
+          <!-- ================================================ -->
+
+          <div
+            id="postingParticipantCandidateError"
+            class="alert-banner is-hidden"
+          >
+            利用者データを読み込めませんでした。
+          </div>
+
+
+          <!-- ================================================ -->
+          <!-- Candidate list                                   -->
+          <!-- ================================================ -->
+
+          <div
+            id="postingParticipantCandidateList"
+            class="history-list"
+          ></div>
+
+
+          <!-- ================================================ -->
+          <!-- No search result                                 -->
+          <!-- ================================================ -->
+
+          <div
+            id="postingParticipantCandidateEmpty"
+            class="empty-state is-hidden"
+            style="
+              margin-top:14px;
+            "
+          >
+            👤
+            <br>
+            該当する利用者がいません
+          </div>
+
+
+          <!-- ================================================ -->
+          <!-- Future trial-user note                           -->
+          <!-- ================================================ -->
+
+          <div
+            id="postingParticipantTrialNote"
+            class="card"
+            style="
+              margin-top:18px;
+              padding:14px 16px;
+            "
+          >
+
+            <strong
+              style="
+                display:block;
+                margin-bottom:5px;
+              "
+            >
+              体験中の方について
+            </strong>
+
+            <small
+              style="
+                display:block;
+                color:#6E746F;
+                line-height:1.6;
+              "
+            >
+              利用開始前の体験者も、
+              SSS側のPersonデータと連携して
+              同じ参加者候補として扱う設計です。
+            </small>
+
+          </div>
+
+
+          <button
+            id="closePostingParticipantManagerButton"
+            class="button button--primary"
+            type="button"
+            style="
+              margin-top:18px;
+            "
+          >
+            登録画面へ戻る
+          </button>
+
+        </section>
+
+      </section>
+
+
+      <!-- ==================================================== -->
+      <!-- REGISTER STEP 2                                      -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="register-map"
+      >
+
+        <div class="stepper">
+
+          <div class="stepper__item is-done">
+            <span>1</span>
+            <small>基本情報</small>
+          </div>
+
+          <i class="is-done"></i>
+
+          <div class="stepper__item is-active">
+            <span>2</span>
+            <small>配布範囲</small>
+          </div>
+
+          <i></i>
+
+          <div class="stepper__item">
+            <span>3</span>
+            <small>今日の成果</small>
+          </div>
+
+        </div>
+
+
+        <section class="section">
+
+          <h2>
+            配った範囲を囲んでください
+          </h2>
+
+          <p class="help">
+            道路や住宅ブロックに沿って、
+            3か所以上タップします。
+          </p>
+
+
+          <div
+            id="postingMap"
+            class="map-container"
+          >
+
+            <div
+              id="postingGoogleMap"
+              class="google-map"
+            ></div>
+
+            <div
+              id="postingMapStatus"
+              class="map-status"
+            >
+              Google Mapsを読み込み中…
+            </div>
+
+            <button
+              id="locateButton"
+              class="map-locate-button"
+              type="button"
+            >
+              ◎ 現在地へ
+            </button>
+
+          </div>
+
+
+          <div
+            id="overlapWarning"
+            class="alert-banner is-hidden"
+          >
+            ⚠ この付近には最近の配布履歴があります
+          </div>
+
+
+          <div class="two-buttons">
+
+            <button
+              id="undoPointButton"
+              class="button button--secondary"
+              type="button"
+            >
+              ↩ 1つ戻す
+            </button>
+
+            <button
+              id="resetMapButton"
+              class="button button--secondary"
+              type="button"
+            >
+              やり直す
+            </button>
+
+          </div>
+
+
+          <button
+            id="confirmMapButton"
+            class="button button--primary"
+            type="button"
+            disabled
+          >
+            この範囲で確定
+          </button>
+
+        </section>
+
+      </section>
+
+
+      <!-- ==================================================== -->
+      <!-- REGISTER STEP 3                                      -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="register-result"
+      >
+
+        <div class="stepper">
+
+          <div class="stepper__item is-done">
+            <span>1</span>
+            <small>基本情報</small>
+          </div>
+
+          <i class="is-done"></i>
+
+          <div class="stepper__item is-done">
+            <span>2</span>
+            <small>配布範囲</small>
+          </div>
+
+          <i class="is-done"></i>
+
+          <div class="stepper__item is-active">
+            <span>3</span>
+            <small>今日の成果</small>
+          </div>
+
+        </div>
+
+
+        <section class="section">
+
+          <h2>
+            今日の成果を入力しよう！
+          </h2>
+
+
+          <label class="form-field">
+
+            📮 配布部数
+
+            <div class="number-input">
+
+              <input
+                id="quantityInput"
+                class="input"
+                type="number"
+                min="1"
+                inputmode="numeric"
+                placeholder="例：180"
+              >
+
+              <span>
+                部
+              </span>
+
+            </div>
+
+          </label>
+
+
+          <div class="form-field">
+
+            <span>
+              🚶 今日の歩数
+            </span>
+
+            <div
+              id="participantSteps"
+              class="participant-steps"
+            ></div>
+
+          </div>
+
+
           <section class="card confirm-card">
-            <h3>登録内容</h3>
+
+            <h3>
+              登録内容
+            </h3>
+
             <div id="confirmContent"></div>
-            <div class="map-preview"><div id="confirmGoogleMap" class="google-map"></div></div>
+
+
+            <div class="map-preview">
+
+              <div
+                id="confirmGoogleMap"
+                class="google-map"
+              ></div>
+
+            </div>
+
           </section>
-          <button id="saveRecordButton" class="button button--primary" type="button">この内容で登録する</button>
+
+
+          <button
+            id="saveRecordButton"
+            class="button button--primary"
+            type="button"
+          >
+            この内容で登録する
+          </button>
+
         </section>
+
       </section>
 
-      <section class="view" data-view="success">
+
+      <!-- ==================================================== -->
+      <!-- SUCCESS                                              -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="success"
+      >
+
         <section class="section success">
-          <div class="saved-badge">✓ 保存しました</div>
-          <div class="success__icon">🎉</div>
-          <h2>今日のポスティング完了！</h2>
-          <div id="successQuantity" class="success__quantity">0部</div>
-          <p>地域に届けました！</p>
+
+          <div class="saved-badge">
+            ✓ 保存しました
+          </div>
+
+          <div class="success__icon">
+            🎉
+          </div>
+
+          <h2>
+            今日のポスティング完了！
+          </h2>
+
+          <div
+            id="successQuantity"
+            class="success__quantity"
+          >
+            0部
+          </div>
+
+          <p>
+            地域に届けました！
+          </p>
+
+
           <section class="card success-summary">
+
             <div id="successMeta"></div>
+
           </section>
+
+
           <div id="successParticipants"></div>
-          <p class="help">今日もおつかれさまでした 🌱</p>
-          <button id="viewHistoryButton" class="button button--primary" type="button">配布履歴で確認する</button>
-          <button id="registerAnotherButton" class="button button--secondary" type="button">続けて登録する</button>
-          <button class="button button--secondary" data-nav="home" type="button">ホームへ戻る</button>
+
+
+          <p class="help">
+            今日もおつかれさまでした 🌱
+          </p>
+
+
+          <button
+            id="viewHistoryButton"
+            class="button button--primary"
+            type="button"
+          >
+            配布履歴で確認する
+          </button>
+
+
+          <button
+            id="registerAnotherButton"
+            class="button button--secondary"
+            type="button"
+          >
+            続けて登録する
+          </button>
+
+
+          <button
+            class="button button--secondary"
+            data-nav="home"
+            type="button"
+          >
+            ホームへ戻る
+          </button>
+
         </section>
+
       </section>
-      <section class="view" data-view="map">
+
+
+      <!-- ==================================================== -->
+      <!-- MAP                                                  -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="map"
+      >
+
         <section class="section">
-          <h2>配布状況</h2>
+
+          <h2>
+            配布状況
+          </h2>
+
+
           <div class="map-container">
-            <div id="historyGoogleMap" class="google-map"></div>
-            <div id="historyMapStatus" class="map-status">Google Mapsを読み込み中…</div>
+
+            <div
+              id="historyGoogleMap"
+              class="google-map"
+            ></div>
+
+            <div
+              id="historyMapStatus"
+              class="map-status"
+            >
+              Google Mapsを読み込み中…
+            </div>
+
           </div>
-          <div id="mapStatusList" class="history-list"></div>
+
+
+          <div
+            id="mapStatusList"
+            class="history-list"
+          ></div>
+
         </section>
+
       </section>
 
-      <section class="view" data-view="achievements">
+
+      <!-- ==================================================== -->
+      <!-- ACHIEVEMENTS                                         -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="achievements"
+      >
+
         <section class="section">
-          <label class="form-field">利用者<select id="achievementParticipantSelect" class="select"></select></label>
+
+          <label class="form-field">
+
+            利用者
+
+            <select
+              id="achievementParticipantSelect"
+              class="select"
+            ></select>
+
+          </label>
+
+
           <div class="achievement-hero">
-            <span>今月</span>
-            <strong><span id="achievementMonthSteps">0</span><small>歩</small></strong>
-            <small>今月のポスティング</small>
+
+            <span>
+              今月
+            </span>
+
+            <strong>
+
+              <span id="achievementMonthSteps">
+                0
+              </span>
+
+              <small>
+                歩
+              </small>
+
+            </strong>
+
+            <small>
+              今月のポスティング
+            </small>
+
           </div>
+
+
           <div class="metric-grid">
-            <div class="metric-card"><div>👣</div><b id="achievementTotalSteps">0歩</b><small>累計歩数</small></div>
-            <div class="metric-card"><div>🌱</div><b id="achievementCount">0回</b><small>参加回数</small></div>
-            <div class="metric-card"><div>📮</div><b id="achievementQuantity">0部</b><small>累計配布部数</small></div>
-            <div class="metric-card"><div>🏆</div><b id="achievementBest">0歩</b><small>自己ベスト</small></div>
+
+            <div class="metric-card">
+
+              <div>
+                👣
+              </div>
+
+              <b id="achievementTotalSteps">
+                0歩
+              </b>
+
+              <small>
+                累計歩数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                🌱
+              </div>
+
+              <b id="achievementCount">
+                0回
+              </b>
+
+              <small>
+                参加回数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                📮
+              </div>
+
+              <b id="achievementQuantity">
+                0部
+              </b>
+
+              <small>
+                累計配布部数
+              </small>
+
+            </div>
+
+
+            <div class="metric-card">
+
+              <div>
+                🏆
+              </div>
+
+              <b id="achievementBest">
+                0歩
+              </b>
+
+              <small>
+                自己ベスト
+              </small>
+
+            </div>
+
           </div>
+
+
           <div class="card progress-goal">
+
             <strong id="achievementGoalMessage"></strong>
-            <div class="progress-bar"><div id="achievementProgressFill"></div></div>
-            <small id="achievementPercent">0%</small>
+
+            <div class="progress-bar">
+
+              <div id="achievementProgressFill"></div>
+
+            </div>
+
+            <small id="achievementPercent">
+              0%
+            </small>
+
           </div>
-          <div id="milestoneRow" class="milestone-row"></div>
+
+
+          <div
+            id="milestoneRow"
+            class="milestone-row"
+          ></div>
+
         </section>
+
       </section>
 
-      <section class="view" data-view="history">
+
+      <!-- ==================================================== -->
+      <!-- HISTORY                                              -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="history"
+      >
+
         <section class="section">
-          <h2>配布履歴</h2>
-          <div id="historyList" class="history-list"></div>
-          <div id="historyEmpty" class="empty-state is-hidden">📭<br>まだ配布履歴がありません</div>
+
+          <h2>
+            配布履歴
+          </h2>
+
+
+          <div
+            id="historyList"
+            class="history-list"
+          ></div>
+
+
+          <div
+            id="historyEmpty"
+            class="empty-state is-hidden"
+          >
+            📭
+            <br>
+            まだ配布履歴がありません
+          </div>
+
         </section>
+
       </section>
+
+
     </main>
-  </div><script src="./config.js?v=20261008-1"></script>
-  <script type="module" src="./firebase.js?v=20261008-2"></script>
-  <script src="./app.js?v=20261008-2" defer></script>
+
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- Scripts                                                  -->
+  <!-- ======================================================== -->
+
+  <script
+    src="./config.js?v=20261008-1"
+  ></script>
+
+  <script
+    type="module"
+    src="./firebase.js?v=20261008-2"
+  ></script>
+
+  <script
+    src="./app.js?v=20261008-3"
+    defer
+  ></script>
+
 </body>
+
 </html>
