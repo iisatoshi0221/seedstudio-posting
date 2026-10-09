@@ -66,7 +66,7 @@
   
   <link
     rel="stylesheet"
-    href="./styles.css?v=20261008-3"
+    href="./styles.css?v=20261009-1"
   >
 </head>
 
@@ -324,6 +324,36 @@
             </span>
 
           </button>
+
+
+          <button
+            class="home-menu-card"
+            data-nav="monthly-report"
+            type="button"
+          >
+
+            <span class="home-menu-card__icon">
+              🏅
+            </span>
+
+            <span>
+
+              <strong>
+                月間成果レポート
+              </strong>
+
+              <small>
+                利用者ごとの月間成果を確認
+              </small>
+
+            </span>
+
+            <span>
+              ›
+            </span>
+
+          </button>
+
 
 
           <button
@@ -1481,6 +1511,167 @@
 
 
       <!-- ==================================================== -->
+      <!-- MONTHLY REPORT                                       -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="monthly-report"
+      >
+
+        <section class="section">
+
+          <h2>
+            月間成果レポート
+          </h2>
+
+          <p class="help">
+            対象月と利用者を選ぶと、
+            その月の成果を集計できます。
+          </p>
+
+
+          <label class="form-field">
+
+            対象月
+
+            <input
+              id="monthlyReportMonthInput"
+              class="input"
+              type="month"
+            >
+
+          </label>
+
+
+          <label class="form-field">
+
+            利用者
+
+            <select
+              id="monthlyReportParticipantSelect"
+              class="select"
+            ></select>
+
+          </label>
+
+
+          <div
+            id="monthlyReportParticipantEmpty"
+            class="empty-state is-hidden"
+            style="
+              padding:24px 10px;
+            "
+          >
+            👣
+            <br>
+            この月のポスティング実績はありません
+          </div>
+
+
+          <button
+            id="monthlyReportPreviewButton"
+            class="button button--primary"
+            type="button"
+          >
+            集計結果を確認
+          </button>
+
+
+          <section
+            id="monthlyReportPreview"
+            class="card monthly-report-preview is-hidden"
+          >
+
+            <div class="monthly-report-preview__header">
+
+              <div>
+                <small>
+                  集計プレビュー
+                </small>
+
+                <h3 id="monthlyReportPreviewTitle">
+                  -
+                </h3>
+              </div>
+
+              <span>
+                MR-2
+              </span>
+
+            </div>
+
+
+            <div class="metric-grid">
+
+              <div class="metric-card">
+                <div>👣</div>
+                <b id="monthlyReportSteps">0歩</b>
+                <small>今月の歩数</small>
+              </div>
+
+              <div class="metric-card">
+                <div>📅</div>
+                <b id="monthlyReportDays">0日</b>
+                <small>参加日数</small>
+              </div>
+
+              <div class="metric-card">
+                <div>📈</div>
+                <b id="monthlyReportAverage">0歩</b>
+                <small>1日平均歩数</small>
+              </div>
+
+              <div class="metric-card">
+                <div>🏆</div>
+                <b id="monthlyReportBest">0歩</b>
+                <small>最高歩数</small>
+              </div>
+
+              <div class="metric-card">
+                <div>🔥</div>
+                <b id="monthlyReportCalories">約0kcal</b>
+                <small>消費カロリー（目安）</small>
+              </div>
+
+              <div class="metric-card">
+                <div>📮</div>
+                <b id="monthlyReportQuantity">0部</b>
+                <small>参加した活動の配布部数</small>
+              </div>
+
+            </div>
+
+
+            <div
+              id="monthlyReportPreviousRow"
+              class="monthly-report-preview__note is-hidden"
+            ></div>
+
+            <div
+              id="monthlyReportLifetimeRow"
+              class="monthly-report-preview__note"
+            ></div>
+
+            <div
+              id="monthlyReportMilestoneRow"
+              class="monthly-report-preview__note"
+            ></div>
+
+
+            <small class="monthly-report-preview__footer">
+              A4レポート本体のデザインは次フェーズで実装します。
+            </small>
+
+          </section>
+
+        </section>
+
+      </section>
+
+
+
+      <!-- ==================================================== -->
       <!-- HISTORY                                              -->
       <!-- ==================================================== -->
 
@@ -1539,7 +1730,7 @@
   ></script>
 
   <script
-    src="./app.js?v=20261009-5"
+    src="./app.js?v=20261009-6"
     defer
   ></script>
 
