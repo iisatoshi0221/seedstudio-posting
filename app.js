@@ -4187,16 +4187,16 @@
         "is-hidden"
       );
 
+    $("#monthlyReportSheetWrapper")
+      ?.classList.remove(
+        "is-hidden"
+      );
+
     renderMonthlyReportSheet(
       stats,
       participantName,
       targetYm
     );
-
-    $("#monthlyReportSheetWrapper")
-      ?.classList.remove(
-        "is-hidden"
-      );
   }
 
 
