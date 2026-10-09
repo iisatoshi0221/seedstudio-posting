@@ -43,3 +43,53 @@ button{-webkit-tap-highlight-color:transparent}
 .map-locate-button{position:absolute;right:12px;bottom:18px;z-index:6;min-height:42px;padding:0 14px;border:1px solid #D8DCD8;border-radius:999px;background:#fff;color:var(--primary-strong);box-shadow:0 4px 14px rgba(0,0,0,.16);font-weight:800}
 .map-locate-button:disabled{opacity:.55}
 .map-preview .google-map{position:absolute}
+
+
+/* ============================================================
+   Monthly report - Phase MR-2 selector / simple preview
+   ============================================================ */
+.monthly-report-preview{
+  margin-top:18px;
+  padding:16px;
+}
+.monthly-report-preview__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+.monthly-report-preview__header small{
+  color:var(--muted);
+  font-weight:700;
+}
+.monthly-report-preview__header h3{
+  margin:4px 0 0;
+  font-size:18px;
+  line-height:1.4;
+}
+.monthly-report-preview__header>span{
+  flex:none;
+  padding:5px 9px;
+  border-radius:999px;
+  background:var(--soft);
+  color:var(--primary-strong);
+  font-size:11px;
+  font-weight:900;
+}
+.monthly-report-preview__note{
+  margin-top:10px;
+  padding:11px 12px;
+  border-radius:12px;
+  background:#F7F5EE;
+  color:#4E5B52;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.6;
+}
+.monthly-report-preview__footer{
+  display:block;
+  margin-top:14px;
+  color:var(--muted);
+  line-height:1.6;
+}
