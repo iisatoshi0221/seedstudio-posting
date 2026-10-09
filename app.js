@@ -3621,6 +3621,64 @@
     renderMonthlyReportParticipantSelect();
   }
 
+  function updateMonthlyReportTemplateScale() {
+    const wrapper =
+      $("#monthlyReportSheetWrapper");
+
+    const sheet =
+      $("#monthlyReportSheet");
+
+    if (
+      !wrapper ||
+      !sheet
+    ) {
+      return;
+    }
+
+    const canvasWidth =
+      1055;
+
+    const canvasHeight =
+      1491;
+
+    const availableWidth =
+      Math.max(
+        1,
+        wrapper.clientWidth -
+          16
+      );
+
+    const scale =
+      Math.min(
+        1,
+        availableWidth /
+          canvasWidth
+      );
+
+    sheet.style.transformOrigin =
+      "top left";
+
+    sheet.style.transform =
+      `scale(${scale})`;
+
+    sheet.style.marginLeft =
+      `${Math.max(
+        0,
+        (
+          availableWidth -
+          canvasWidth *
+            scale
+        ) / 2
+      )}px`;
+
+    wrapper.style.height =
+      `${Math.ceil(
+        canvasHeight *
+          scale
+      ) + 20}px`;
+  }
+
+
   function renderMonthlyReportSheet(
     stats,
     participantName,
@@ -3639,17 +3697,39 @@
       }
     };
 
-    setText(
-      "#monthlyReportA4Name",
-      `${participantName}さん`
-    );
 
-    setText(
-      "#monthlyReportA4Month",
-      formatYmJa(
+    // ----------------------------------------------------------
+    // Title
+    // Background already contains the gold ribbon.
+    // Overlay only the dynamic title text.
+    // ----------------------------------------------------------
+
+    const title =
+      `${participantName}さんの ${formatYmJa(
         targetYm
-      )
-    );
+      )} Posting Record`;
+
+    const titleElement =
+      $("#monthlyReportA4Title");
+
+    if (titleElement) {
+      titleElement.textContent =
+        title;
+
+      titleElement.style.fontSize =
+        title.length >= 34
+          ? "27px"
+          : title.length >= 29
+            ? "30px"
+            : "34px";
+    }
+
+
+    // ----------------------------------------------------------
+    // Monthly values
+    // Only variable values are overlaid.
+    // Labels / cards / units styling live in the image template.
+    // ----------------------------------------------------------
 
     setText(
       "#monthlyReportA4Steps",
@@ -3684,7 +3764,7 @@
 
     setText(
       "#monthlyReportA4Calories",
-      `約${formatNumber(
+      `${formatNumber(
         stats.monthly.calories
       )}kcal`
     );
@@ -3697,6 +3777,11 @@
       )}部`
     );
 
+
+    // ----------------------------------------------------------
+    // Lifetime values
+    // ----------------------------------------------------------
+
     setText(
       "#monthlyReportA4LifetimeSteps",
       `${formatNumber(
@@ -3706,7 +3791,7 @@
 
     setText(
       "#monthlyReportA4LifetimeCalories",
-      `約${formatNumber(
+      `${formatNumber(
         stats.lifetime.calories
       )}kcal`
     );
@@ -3730,147 +3815,98 @@
 
     // ----------------------------------------------------------
     // Highlights
-    // Priority:
-    // 1. newly achieved milestone
-    // 2. best daily steps
-    // 3. previous-month difference when previous data exists
+    // The template already contains the three card designs:
+    // best / previous month / achievement.
+    // Overlay text only.
     // ----------------------------------------------------------
-
-    const highlights =
-      [];
-
-    const newlyAchieved =
-      Array.isArray(
-        stats.milestones
-          .newlyAchieved
-      )
-        ? stats.milestones
-            .newlyAchieved
-        : [];
-
-    if (
-      newlyAchieved.length
-    ) {
-      const highest =
-        newlyAchieved[
-          newlyAchieved.length -
-          1
-        ];
-
-      highlights.push({
-        icon:
-          "🏅",
-
-        title:
-          `${formatNumber(
-            highest
-          )}歩達成！`,
-
-        detail:
-          newlyAchieved.length >
-          1
-            ? `今月${newlyAchieved.length}つのマイルストーンを達成`
-            : "マイルストーン達成",
-
-        gold:
-          true
-      });
-    }
-
-    highlights.push({
-      icon:
-        "🏆",
-
-      title:
-        `最高 ${formatNumber(
-          stats.monthly
-            .bestDailySteps
-        )}歩`,
-
-      detail:
-        "今月のベスト"
-    });
-
-    if (
-      stats.previousMonth
-        .hasActivity
-    ) {
-      const difference =
-        stats.previousMonth
-          .difference;
-
-      highlights.push({
-        icon:
-          difference >= 0
-            ? "↗"
-            : "↘",
-
-        title:
-          `先月より ${
-            difference > 0
-              ? "+"
-              : ""
-          }${formatNumber(
-            difference
-          )}歩`,
-
-        detail:
-          "前月比"
-      });
-    }
 
     const highlightContainer =
       $("#monthlyReportA4Highlights");
 
     if (highlightContainer) {
+      const bestValue =
+        `最高 ${formatNumber(
+          stats.monthly
+            .bestDailySteps
+        )}歩`;
+
+      const previousValue =
+        stats.previousMonth
+          .hasActivity
+          ? `${
+              stats.previousMonth
+                .difference > 0
+                ? "+"
+                : ""
+            }${formatNumber(
+              stats.previousMonth
+                .difference
+            )}歩`
+          : "";
+
+      const newlyAchieved =
+        Array.isArray(
+          stats.milestones
+            .newlyAchieved
+        )
+          ? stats.milestones
+              .newlyAchieved
+          : [];
+
+      let achievementValue =
+        "";
+
+      if (
+        newlyAchieved.length
+      ) {
+        const highest =
+          newlyAchieved[
+            newlyAchieved.length -
+              1
+          ];
+
+        achievementValue =
+          `${formatNumber(
+            highest
+          )}歩\nマイルストーン達成！`;
+      }
+
       highlightContainer.innerHTML =
-        highlights
-          .slice(0, 3)
-          .map(
-            (
-              highlight
-            ) => `
-              <div
-                class="monthly-report-a4-highlight${
-                  highlight.gold
-                    ? " is-gold"
-                    : ""
-                }"
-              >
-                <span>
-                  ${escapeHtml(
-                    highlight.icon
-                  )}
-                </span>
+        `
+          <div class="monthly-report-template__highlight-value monthly-report-template__highlight-value--best">
+            ${escapeHtml(
+              bestValue
+            )}
+          </div>
 
-                <strong>
-                  ${escapeHtml(
-                    highlight.title
-                  )}
-                </strong>
+          <div class="monthly-report-template__highlight-value monthly-report-template__highlight-value--previous">
+            ${escapeHtml(
+              previousValue
+            )}
+          </div>
 
-                <small>
-                  ${escapeHtml(
-                    highlight.detail
-                  )}
-                </small>
-              </div>
-            `
-          )
-          .join("");
+          <div class="monthly-report-template__highlight-value monthly-report-template__highlight-value--achievement">
+            ${escapeHtml(
+              achievementValue
+            ).replace(
+              /\n/g,
+              "<br>"
+            )}
+          </div>
+        `;
     }
 
 
     // ----------------------------------------------------------
     // Milestones
+    // Background contains the line, circles, values and labels.
+    // Overlay only achieved / next states.
     // ----------------------------------------------------------
 
     const milestoneContainer =
       $("#monthlyReportA4Milestones");
 
-    if (
-      milestoneContainer
-    ) {
+    if (milestoneContainer) {
       const allMilestones =
         Array.isArray(
           window
@@ -3897,49 +3933,60 @@
                   .nextGoal ===
                 goal;
 
-              const stateClass =
-                achieved
-                  ? "is-achieved"
-                  : next
-                    ? "is-next"
-                    : "is-locked";
-
-              const symbol =
-                achieved
-                  ? "✓"
-                  : next
-                    ? "→"
-                    : "○";
-
-              const label =
-                achieved
-                  ? "達成！"
-                  : next
-                    ? "次はここ！"
-                    : "目標";
+              if (
+                !achieved &&
+                !next
+              ) {
+                return `
+                  <div class="monthly-report-template__milestone-state"></div>
+                `;
+              }
 
               return `
-                <div
-                  class="monthly-report-a4-milestone ${stateClass}"
-                >
+                <div class="monthly-report-template__milestone-state ${
+                  achieved
+                    ? "is-achieved"
+                    : "is-next"
+                }">
                   <span>
-                    ${symbol}
+                    ${
+                      achieved
+                        ? "✓"
+                        : ""
+                    }
                   </span>
-
-                  <strong>
-                    ${formatNumber(
-                      goal
-                    )}
-                  </strong>
-
-                  <small>
-                    歩・${label}
-                  </small>
+                  ${
+                    next
+                      ? '<small>次はここ！</small>'
+                      : ""
+                  }
                 </div>
               `;
             }
           )
           .join("");
+    }
+
+
+    // ----------------------------------------------------------
+    // Fixed 1055 x 1491 virtual A4 canvas.
+    // The whole sheet scales as one object for preview.
+    // ----------------------------------------------------------
+
+    updateMonthlyReportTemplateScale();
+
+    if (
+      !window
+        .__seedStudioMonthlyReportResizeBound
+    ) {
+      window.addEventListener(
+        "resize",
+        updateMonthlyReportTemplateScale
+      );
+
+      window
+        .__seedStudioMonthlyReportResizeBound =
+        true;
     }
   }
 
