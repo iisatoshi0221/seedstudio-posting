@@ -66,7 +66,7 @@
   
   <link
     rel="stylesheet"
-    href="./styles.css?v=20261009-4"
+    href="./styles.css?v=20261009-5"
   >
 </head>
 
@@ -1667,7 +1667,7 @@
 
 
           <!-- ================================================ -->
-          <!-- A4 MONTHLY REPORT SHEET - MR-3A                  -->
+          <!-- A4 MONTHLY REPORT - IMAGE TEMPLATE MODE           -->
           <!-- ================================================ -->
 
           <div
@@ -1677,262 +1677,112 @@
 
             <article
               id="monthlyReportSheet"
-              class="monthly-report-sheet"
+              class="monthly-report-template"
               aria-label="月間成果レポート A4プレビュー"
             >
 
-              <div class="monthly-report-sheet__frame">
-
-                <div class="monthly-report-sheet__inner">
-
-
-                  <!-- Header -->
-
-                  <header class="monthly-report-a4-header">
-
-                    <div class="monthly-report-a4-brand">
-
-                      <img
-                        class="monthly-report-a4-brand__icon"
-                        src="./icon-192.png"
-                        alt=""
-                      >
-
-                      <div>
-                        <strong>SeedStudio Posting</strong>
-                        <small>歩いて届ける、未来のたね。</small>
-                      </div>
-
-                    </div>
-
-                    <div class="monthly-report-a4-eyebrow">
-                      MONTHLY POSTING RECORD
-                    </div>
-
-                    <div class="monthly-report-a4-ribbon">
-
-                      <i class="monthly-report-a4-ribbon__tail monthly-report-a4-ribbon__tail--left"></i>
-
-                      <div class="monthly-report-a4-ribbon__body">
-
-                        <h1
-                          id="monthlyReportA4Name"
-                          class="monthly-report-a4-name"
-                        >
-                          〇〇さん
-                        </h1>
-
-                        <span class="monthly-report-a4-ribbon__of">
-                          の
-                        </span>
-
-                        <div
-                          id="monthlyReportA4Month"
-                          class="monthly-report-a4-month"
-                        >
-                          20XX年XX月
-                        </div>
-
-                        <span class="monthly-report-a4-ribbon__record">
-                          Posting Record
-                        </span>
-
-                      </div>
-
-                      <i class="monthly-report-a4-ribbon__tail monthly-report-a4-ribbon__tail--right"></i>
-
-                    </div>
-
-                    <p class="monthly-report-a4-message">
-                      今月もたくさん歩いて、地域に届けました！
-                    </p>
-
-                  </header>
-
-
-                  <!-- Main achievement -->
-
-                  <section class="monthly-report-a4-main">
-
-                    <div class="monthly-report-a4-main__label">
-                      今月の歩数
-                    </div>
-
-                    <div class="monthly-report-a4-main__steps">
-                      <strong id="monthlyReportA4Steps">—</strong>
-                      <span>歩</span>
-                    </div>
-
-                    <div class="monthly-report-a4-laurel">
-                      <span>❧</span>
-                      <b>YOUR MONTHLY ACHIEVEMENT</b>
-                      <span>❧</span>
-                    </div>
-
-                  </section>
-
-
-                  <!-- Monthly KPIs -->
-
-                  <section class="monthly-report-a4-kpis">
-
-                    <div class="monthly-report-a4-kpi">
-                      <span>📅</span>
-                      <strong id="monthlyReportA4Days">—</strong>
-                      <small>参加日数</small>
-                    </div>
-
-                    <div class="monthly-report-a4-kpi">
-                      <span>👣</span>
-                      <strong id="monthlyReportA4Average">—</strong>
-                      <small>1日平均歩数</small>
-                    </div>
-
-                    <div class="monthly-report-a4-kpi">
-                      <span>🏆</span>
-                      <strong id="monthlyReportA4Best">—</strong>
-                      <small>最高歩数</small>
-                    </div>
-
-                    <div class="monthly-report-a4-kpi">
-                      <span>🔥</span>
-                      <strong id="monthlyReportA4Calories">—</strong>
-                      <small>消費カロリー（目安）</small>
-                    </div>
-
-                    <div class="monthly-report-a4-kpi">
-                      <span>📮</span>
-                      <strong id="monthlyReportA4Quantity">—</strong>
-                      <small>参加した活動の配布部数</small>
-                    </div>
-
-                  </section>
-
-
-                  <!-- Highlights -->
-
-                  <section class="monthly-report-a4-section">
-
-                    <div class="monthly-report-a4-section__title">
-                      今月のハイライト
-                    </div>
-
-                    <div
-                      id="monthlyReportA4Highlights"
-                      class="monthly-report-a4-highlights"
-                    ></div>
-
-                  </section>
-
-
-                  <!-- Chart placeholder -->
-
-                  <section class="monthly-report-a4-section monthly-report-a4-chart">
-
-                    <div class="monthly-report-a4-section__heading">
-                      <div class="monthly-report-a4-section__title">
-                        歩数の推移
-                      </div>
-                      <small>
-                        コツコツと歩いた一歩一歩が、地域への大切なつながりになっています。
-                      </small>
-                    </div>
-
-                    <div
-                      id="monthlyReportChart"
-                      class="monthly-report-a4-chart__canvas"
-                    >
-                      <div class="monthly-report-a4-chart__guide"></div>
-                      <div class="monthly-report-a4-chart__guide"></div>
-                      <div class="monthly-report-a4-chart__guide"></div>
-
-                      <div class="monthly-report-a4-chart__placeholder">
-                        日別歩数グラフ
-                      </div>
-                    </div>
-
-                  </section>
-
-
-                  <!-- Lifetime -->
-
-                  <section class="monthly-report-a4-section">
-
-                    <div class="monthly-report-a4-section__heading">
-                      <div class="monthly-report-a4-section__title">
-                        Postingを始めてから
-                      </div>
-                      <small>
-                        あなたが参加した活動で、これまで地域にたくさんのチラシを届けました。
-                      </small>
-                    </div>
-
-                    <div class="monthly-report-a4-lifetime">
-
-                      <div>
-                        <strong id="monthlyReportA4LifetimeSteps">—</strong>
-                        <small>累計歩数</small>
-                      </div>
-
-                      <div>
-                        <strong id="monthlyReportA4LifetimeCalories">—</strong>
-                        <small>累計消費カロリー（目安）</small>
-                      </div>
-
-                      <div>
-                        <strong id="monthlyReportA4LifetimeDays">—</strong>
-                        <small>累計参加日数</small>
-                      </div>
-
-                      <div>
-                        <strong id="monthlyReportA4LifetimeQuantity">—</strong>
-                        <small>参加した活動の累計配布部数</small>
-                      </div>
-
-                    </div>
-
-                  </section>
-
-
-                  <!-- Milestones -->
-
-                  <section class="monthly-report-a4-section">
-
-                    <div class="monthly-report-a4-section__heading">
-                      <div class="monthly-report-a4-section__title">
-                        マイルストーン
-                      </div>
-                      <small>
-                        これからも、あなたのペースで一歩ずつ。
-                      </small>
-                    </div>
-
-                    <div
-                      id="monthlyReportA4Milestones"
-                      class="monthly-report-a4-milestones"
-                    ></div>
-
-                  </section>
-
-
-                  <!-- Handwritten staff comment -->
-
-                  <section class="monthly-report-a4-comment">
-
-                    <div class="monthly-report-a4-section__title">
-                      職員からのひとこと
-                    </div>
-
-                    <div class="monthly-report-a4-comment__lines">
-                      <span></span>
-                      <span></span>
-                      <span></span>
-                    </div>
-
-                  </section>
-
-
+              <img
+                class="monthly-report-template__background"
+                src="./monthly-report-template.jpg?v=20261009-1"
+                alt=""
+              >
+
+              <div class="monthly-report-template__overlay">
+
+                <div
+                  id="monthlyReportA4Title"
+                  class="monthly-report-template__field monthly-report-template__title"
+                >
+                  <span id="monthlyReportA4Name">〇〇さん</span>
+                  <span class="monthly-report-template__title-of">の</span>
+                  <span id="monthlyReportA4Month">20XX年XX月</span>
+                  <span class="monthly-report-template__title-record">Posting Record</span>
                 </div>
+
+                <div
+                  id="monthlyReportA4Steps"
+                  class="monthly-report-template__field monthly-report-template__monthly-steps"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Days"
+                  class="monthly-report-template__field monthly-report-template__kpi monthly-report-template__kpi--days"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Average"
+                  class="monthly-report-template__field monthly-report-template__kpi monthly-report-template__kpi--average"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Best"
+                  class="monthly-report-template__field monthly-report-template__kpi monthly-report-template__kpi--best"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Calories"
+                  class="monthly-report-template__field monthly-report-template__kpi monthly-report-template__kpi--calories"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Quantity"
+                  class="monthly-report-template__field monthly-report-template__kpi monthly-report-template__kpi--quantity"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Highlights"
+                  class="monthly-report-template__highlights"
+                ></div>
+
+                <div
+                  id="monthlyReportChart"
+                  class="monthly-report-template__chart"
+                ></div>
+
+                <div
+                  id="monthlyReportA4LifetimeSteps"
+                  class="monthly-report-template__field monthly-report-template__lifetime monthly-report-template__lifetime--steps"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4LifetimeCalories"
+                  class="monthly-report-template__field monthly-report-template__lifetime monthly-report-template__lifetime--calories"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4LifetimeDays"
+                  class="monthly-report-template__field monthly-report-template__lifetime monthly-report-template__lifetime--days"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4LifetimeQuantity"
+                  class="monthly-report-template__field monthly-report-template__lifetime monthly-report-template__lifetime--quantity"
+                >
+                  —
+                </div>
+
+                <div
+                  id="monthlyReportA4Milestones"
+                  class="monthly-report-template__milestones"
+                ></div>
 
               </div>
 
