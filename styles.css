@@ -96,75 +96,166 @@ button{-webkit-tap-highlight-color:transparent}
 
 
 /* ============================================================
-   Monthly report - Phase MR-3A A4 skeleton
+   Monthly report - Phase MR-3D visual design
+   Reference: award-style SeedStudio monthly record
    ============================================================ */
 
 .monthly-report-sheet-wrapper{
-  margin:22px -8px 0;
-  padding:18px 8px 26px;
+  margin:24px -10px 0;
+  padding:20px 8px 30px;
   overflow-x:auto;
-  border-radius:18px;
-  background:#EDEAE0;
+  border-radius:20px;
+  background:
+    linear-gradient(135deg,#E6E1D3,#F4F1E8 48%,#E7E3D7);
 }
 
 .monthly-report-sheet{
+  --report-green:#17653F;
+  --report-green-deep:#0D5536;
+  --report-green-light:#E9F6E5;
+  --report-gold:#CDA63C;
+  --report-gold-deep:#A47C21;
+  --report-cream:#FFFDF3;
+  --report-line:#D8DECD;
+
   position:relative;
   width:100%;
   max-width:210mm;
   aspect-ratio:210 / 297;
   margin:0 auto;
   overflow:hidden;
-  background:#FFFEF9;
-  color:#233128;
-  box-shadow:0 14px 38px rgba(36,57,43,.18);
+  background:
+    radial-gradient(circle at 14% 10%,rgba(129,186,92,.12),transparent 18%),
+    radial-gradient(circle at 90% 12%,rgba(214,180,76,.10),transparent 17%),
+    linear-gradient(180deg,#FFFDF8 0%,#FFFEF8 55%,#FCF8E9 100%);
+  color:#17382A;
+  box-shadow:
+    0 18px 42px rgba(34,52,39,.20),
+    0 2px 8px rgba(34,52,39,.10);
+}
+
+.monthly-report-sheet::before,
+.monthly-report-sheet::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  pointer-events:none;
+  width:24%;
+  height:18%;
+  opacity:.34;
+  background:
+    radial-gradient(ellipse at 20% 30%,#8FC879 0 18%,transparent 19%),
+    radial-gradient(ellipse at 48% 18%,#6CB362 0 18%,transparent 19%),
+    radial-gradient(ellipse at 72% 38%,#A9D68B 0 18%,transparent 19%),
+    radial-gradient(ellipse at 38% 62%,#78B966 0 18%,transparent 19%),
+    radial-gradient(ellipse at 72% 72%,#BDDFA0 0 18%,transparent 19%);
+}
+
+.monthly-report-sheet::before{
+  left:-5%;
+  top:0;
+  transform:rotate(-18deg);
+}
+
+.monthly-report-sheet::after{
+  right:-5%;
+  bottom:0;
+  transform:rotate(160deg);
 }
 
 .monthly-report-sheet__frame{
   position:absolute;
-  inset:2.2%;
-  border:2px solid #376E53;
-  padding:.9%;
+  inset:1.45%;
+  z-index:1;
+  border:2px solid #5A8E55;
+  border-radius:2.6%;
+  padding:.85%;
+  box-shadow:
+    inset 0 0 0 1px rgba(205,166,60,.48),
+    inset 0 0 18px rgba(82,130,75,.07);
 }
 
 .monthly-report-sheet__frame::before{
   content:"";
   position:absolute;
-  inset:4px;
+  inset:5px;
   pointer-events:none;
-  border:1px solid #C8A85B;
+  border:1px solid #D5B951;
+  border-radius:2%;
+}
+
+.monthly-report-sheet__frame::after{
+  content:"❧";
+  position:absolute;
+  left:50%;
+  bottom:1.2%;
+  transform:translateX(-50%);
+  color:#C8A33C;
+  font-size:clamp(8px,1.5vw,13px);
 }
 
 .monthly-report-sheet__inner{
   position:relative;
-  z-index:1;
+  z-index:2;
   height:100%;
   display:flex;
   flex-direction:column;
-  gap:1.15%;
-  padding:3.7% 4.5% 3.3%;
+  gap:.92%;
+  padding:2.9% 2.8% 2.7%;
   background:
-    radial-gradient(circle at 3% 3%,rgba(111,174,78,.12),transparent 12%),
-    radial-gradient(circle at 97% 3%,rgba(200,168,91,.11),transparent 11%),
-    linear-gradient(180deg,#FFFEF9 0%,#FFFCF3 100%);
+    linear-gradient(90deg,rgba(43,117,67,.025),transparent 8%,transparent 92%,rgba(43,117,67,.025)),
+    transparent;
 }
 
+
+/* Header / brand */
+
 .monthly-report-a4-header{
+  position:relative;
   text-align:center;
+  padding:0 2%;
+}
+
+.monthly-report-a4-header::before,
+.monthly-report-a4-header::after{
+  content:"";
+  position:absolute;
+  top:4%;
+  width:15%;
+  height:34%;
+  opacity:.25;
+  background:
+    radial-gradient(ellipse at 25% 30%,#65A85C 0 22%,transparent 23%),
+    radial-gradient(ellipse at 65% 55%,#92C87D 0 20%,transparent 21%),
+    radial-gradient(ellipse at 38% 78%,#B6DB9B 0 19%,transparent 20%);
+}
+
+.monthly-report-a4-header::before{
+  left:-1%;
+  transform:rotate(-18deg);
+}
+
+.monthly-report-a4-header::after{
+  right:-1%;
+  transform:scaleX(-1) rotate(-18deg);
 }
 
 .monthly-report-a4-brand{
+  position:relative;
+  z-index:2;
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:1.8%;
-  color:#2F6D4F;
+  gap:1.35%;
+  color:var(--report-green);
 }
 
 .monthly-report-a4-brand__icon{
-  width:7.2%;
-  min-width:26px;
+  width:8.6%;
+  min-width:28px;
   aspect-ratio:1;
-  border-radius:20%;
+  border-radius:24%;
+  filter:drop-shadow(0 2px 2px rgba(20,80,48,.12));
 }
 
 .monthly-report-a4-brand strong,
@@ -174,110 +265,267 @@ button{-webkit-tap-highlight-color:transparent}
 }
 
 .monthly-report-a4-brand strong{
-  font-size:clamp(12px,2.6vw,23px);
-  line-height:1.1;
+  font-family:Georgia,"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(16px,3.65vw,31px);
+  font-weight:900;
+  line-height:1;
+  letter-spacing:-.02em;
 }
 
 .monthly-report-a4-brand small{
-  margin-top:2px;
-  font-size:clamp(6px,1.25vw,10px);
-  color:#6C765F;
+  margin-top:3px;
+  color:#368154;
+  font-size:clamp(6px,1.28vw,10px);
+  font-weight:800;
+  letter-spacing:.09em;
 }
 
 .monthly-report-a4-eyebrow{
-  width:max-content;
-  max-width:90%;
-  margin:1.5% auto 0;
-  padding:.55% 3%;
-  border-radius:999px;
-  background:#C8A85B;
-  color:#fff;
-  font-size:clamp(7px,1.4vw,11px);
-  font-weight:900;
-  letter-spacing:.13em;
+  display:none;
+}
+
+
+/* Gold ribbon title */
+
+.monthly-report-a4-ribbon{
+  position:relative;
+  z-index:3;
+  width:91%;
+  margin:1.35% auto .75%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.monthly-report-a4-ribbon__body{
+  position:relative;
+  z-index:2;
+  width:91%;
+  min-height:clamp(34px,8.4vw,69px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:.65%;
+  padding:1.2% 4%;
+  border:1px solid #B88C23;
+  border-radius:48% 48% 18% 18% / 18% 18% 20% 20%;
+  background:
+    linear-gradient(180deg,#F5DE8A 0%,#DDB84F 38%,#F5DA7B 67%,#CDA23B 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.72),
+    inset 0 -2px 5px rgba(134,89,12,.20),
+    0 3px 7px rgba(90,72,24,.14);
+  color:#113A2A;
+  white-space:nowrap;
+}
+
+.monthly-report-a4-ribbon__body::before{
+  content:"";
+  position:absolute;
+  inset:7% 2%;
+  border-top:1px solid rgba(255,255,255,.64);
+  border-bottom:1px solid rgba(137,91,15,.25);
+  pointer-events:none;
+}
+
+.monthly-report-a4-ribbon__tail{
+  position:absolute;
+  z-index:1;
+  top:31%;
+  width:15%;
+  height:61%;
+  background:linear-gradient(145deg,#D4A52D,#F1D16F 52%,#BD8C20);
+  border:1px solid #B88923;
+  box-shadow:0 2px 4px rgba(107,73,14,.18);
+}
+
+.monthly-report-a4-ribbon__tail--left{
+  left:0;
+  transform:skewY(-8deg);
+  clip-path:polygon(0 0,100% 8%,82% 100%,54% 76%,0 92%,14% 50%);
+}
+
+.monthly-report-a4-ribbon__tail--right{
+  right:0;
+  transform:scaleX(-1) skewY(-8deg);
+  clip-path:polygon(0 0,100% 8%,82% 100%,54% 76%,0 92%,14% 50%);
+}
+
+.monthly-report-a4-name,
+.monthly-report-a4-month,
+.monthly-report-a4-ribbon__of,
+.monthly-report-a4-ribbon__record{
+  position:relative;
+  z-index:3;
 }
 
 .monthly-report-a4-name{
-  margin:1.4% 0 .2%;
-  color:#265D45;
-  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
-  font-size:clamp(20px,5.1vw,39px);
-  line-height:1.15;
-  letter-spacing:.04em;
+  margin:0;
+  color:#0D3F2D;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",Georgia,serif;
+  font-size:clamp(13px,3.1vw,25px);
+  font-weight:900;
+  line-height:1;
+  letter-spacing:.01em;
 }
 
 .monthly-report-a4-month{
-  color:#735E2C;
-  font-size:clamp(10px,2.2vw,17px);
+  color:#0D3F2D;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",Georgia,serif;
+  font-size:clamp(12px,2.85vw,23px);
+  font-weight:900;
+  line-height:1;
+}
+
+.monthly-report-a4-ribbon__of{
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(8px,1.75vw,14px);
+  font-weight:900;
+}
+
+.monthly-report-a4-ribbon__record{
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(10px,2.35vw,19px);
   font-weight:900;
 }
 
 .monthly-report-a4-message{
-  margin:.8% 0 0;
-  color:#59635B;
+  position:relative;
+  z-index:2;
+  margin:.35% 0 0;
+  color:#31533F;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
   font-size:clamp(7px,1.55vw,12px);
-  font-weight:700;
+  font-weight:900;
+  letter-spacing:.04em;
 }
 
+.monthly-report-a4-message::before,
+.monthly-report-a4-message::after{
+  content:"〽";
+  display:inline-block;
+  margin:0 1.5%;
+  color:#D3A42B;
+  transform:rotate(-18deg);
+}
+
+
+/* Main achievement */
+
 .monthly-report-a4-main{
+  position:relative;
   text-align:center;
-  padding:1.6% 2% 1%;
+  padding:1.2% 5% .85%;
+  border-radius:18px;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(228,245,214,.72),rgba(247,249,226,.42) 58%,transparent 78%);
+}
+
+.monthly-report-a4-main::before,
+.monthly-report-a4-main::after{
+  content:"❧";
+  position:absolute;
+  top:39%;
+  color:#D6AB35;
+  font-size:clamp(23px,6vw,49px);
+  opacity:.95;
+}
+
+.monthly-report-a4-main::before{
+  left:20%;
+  transform:rotate(-38deg);
+}
+
+.monthly-report-a4-main::after{
+  right:20%;
+  transform:scaleX(-1) rotate(-38deg);
 }
 
 .monthly-report-a4-main__label{
-  color:#5F6C62;
-  font-size:clamp(8px,1.7vw,13px);
+  display:inline-flex;
+  align-items:center;
+  gap:.35em;
+  color:#113E2D;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(10px,2.25vw,18px);
   font-weight:900;
 }
 
+.monthly-report-a4-main__label::before{
+  content:"♛";
+  color:#E0B12C;
+  font-size:1.55em;
+}
+
 .monthly-report-a4-main__steps{
+  position:relative;
+  z-index:2;
   display:flex;
   align-items:baseline;
   justify-content:center;
-  gap:1.2%;
-  color:#24573F;
-  line-height:1;
+  gap:1%;
+  margin-top:.15%;
+  color:#075739;
+  line-height:.92;
+  text-shadow:0 2px 0 rgba(255,255,255,.72);
 }
 
 .monthly-report-a4-main__steps strong{
-  font-family:Georgia,"Yu Mincho",serif;
-  font-size:clamp(37px,9.5vw,78px);
-  letter-spacing:.01em;
+  font-family:Georgia,"Times New Roman","Yu Mincho",serif;
+  font-size:clamp(40px,10.9vw,90px);
+  font-weight:900;
+  letter-spacing:.005em;
 }
 
 .monthly-report-a4-main__steps span{
-  font-size:clamp(12px,2.8vw,22px);
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(15px,3.3vw,27px);
   font-weight:900;
 }
 
 .monthly-report-a4-laurel{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:2%;
-  margin-top:.7%;
-  color:#AA8739;
-  font-size:clamp(6px,1.25vw,10px);
-  letter-spacing:.08em;
+  display:none;
 }
 
-.monthly-report-a4-laurel span{
-  font-size:1.5em;
-}
+
+/* Monthly KPI cards */
 
 .monthly-report-a4-kpis{
   display:grid;
   grid-template-columns:repeat(5,1fr);
-  gap:1%;
+  gap:.85%;
 }
 
 .monthly-report-a4-kpi{
+  position:relative;
   min-width:0;
-  padding:7% 4%;
-  border:1px solid #E1DDCE;
-  border-radius:9px;
-  background:rgba(255,255,255,.82);
+  padding:5.6% 3.4% 5.2%;
+  border:1px solid #D7E3D2;
+  border-radius:13px;
+  background:linear-gradient(180deg,#FFF,#F5FAEF);
   text-align:center;
+  box-shadow:0 2px 7px rgba(52,93,62,.08);
+}
+
+.monthly-report-a4-kpi:nth-child(1){
+  border-color:#CFE4B9;
+  background:linear-gradient(180deg,#FEFFF8,#F0F9DF);
+}
+.monthly-report-a4-kpi:nth-child(2){
+  border-color:#BFE0C1;
+  background:linear-gradient(180deg,#FDFFF9,#EAF7E8);
+}
+.monthly-report-a4-kpi:nth-child(3){
+  border-color:#E9D284;
+  background:linear-gradient(180deg,#FFFDF7,#FFF7D9);
+}
+.monthly-report-a4-kpi:nth-child(4){
+  border-color:#F0C7A7;
+  background:linear-gradient(180deg,#FFFCF9,#FFF0E7);
+}
+.monthly-report-a4-kpi:nth-child(5){
+  border-color:#B8D7EC;
+  background:linear-gradient(180deg,#FCFEFF,#EAF5FC);
 }
 
 .monthly-report-a4-kpi>span,
@@ -287,47 +535,92 @@ button{-webkit-tap-highlight-color:transparent}
 }
 
 .monthly-report-a4-kpi>span{
-  font-size:clamp(9px,2vw,15px);
+  width:clamp(22px,5vw,42px);
+  height:clamp(22px,5vw,42px);
+  display:grid;
+  place-items:center;
+  margin:0 auto 3%;
+  border-radius:50%;
+  background:rgba(255,255,255,.68);
+  box-shadow:0 1px 5px rgba(43,91,57,.08);
+  font-size:clamp(11px,2.5vw,20px);
 }
 
 .monthly-report-a4-kpi>strong{
-  margin-top:3%;
-  color:#2F6D4F;
-  font-size:clamp(8px,1.8vw,14px);
+  color:#102E24;
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(10px,2.35vw,19px);
+  line-height:1.05;
 }
 
 .monthly-report-a4-kpi>small{
-  margin-top:3%;
-  color:#6D746F;
-  font-size:clamp(5px,1.05vw,8px);
-  line-height:1.25;
+  margin-top:4%;
+  color:#274738;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(5px,1.05vw,8.5px);
+  font-weight:900;
+  line-height:1.16;
 }
+
+
+/* Section headers */
 
 .monthly-report-a4-section{
   min-height:0;
 }
 
-.monthly-report-a4-section__title{
+.monthly-report-a4-section__heading{
   display:flex;
   align-items:center;
-  gap:1.5%;
-  margin-bottom:.8%;
-  color:#2F6D4F;
-  font-size:clamp(8px,1.65vw,13px);
+  justify-content:space-between;
+  gap:2%;
+  margin-bottom:.65%;
+}
+
+.monthly-report-a4-section__heading>small{
+  max-width:61%;
+  color:#5F665F;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(4.5px,.9vw,7px);
+  font-weight:700;
+  text-align:right;
+  line-height:1.25;
+}
+
+.monthly-report-a4-section__title{
+  min-width:32%;
+  display:inline-flex;
+  align-items:center;
+  gap:.38em;
+  margin:0;
+  padding:.65% 3% .75% 2.2%;
+  border-radius:999px 22px 22px 999px;
+  background:
+    linear-gradient(105deg,#1C6F46,#4E935B 62%,rgba(92,153,93,.12));
+  color:#fff;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(8px,1.75vw,14px);
   font-weight:900;
+  line-height:1.15;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+.monthly-report-a4-section__title::before{
+  content:"🌱";
+  font-size:.95em;
 }
 
 .monthly-report-a4-section__title::after{
-  content:"";
-  flex:1;
-  height:1px;
-  background:linear-gradient(90deg,#88AF91,#E6DFC9);
+  display:none;
 }
+
+
+/* Highlights */
 
 .monthly-report-a4-highlights{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(28%,1fr));
-  gap:1.2%;
+  gap:.9%;
 }
 
 .monthly-report-a4-highlight{
@@ -336,79 +629,128 @@ button{-webkit-tap-highlight-color:transparent}
   grid-template-rows:auto auto;
   column-gap:5%;
   align-items:center;
-  padding:4% 6%;
-  border:1px solid #DDE6DE;
-  border-radius:9px;
-  background:#F2F7F2;
+  min-height:clamp(34px,8.3vw,68px);
+  padding:3.2% 5%;
+  border:1px solid #D8E1D3;
+  border-radius:12px;
+  background:linear-gradient(180deg,#FFF,#F7FAF1);
+  box-shadow:0 1px 5px rgba(40,72,48,.07);
 }
 
 .monthly-report-a4-highlight.is-gold{
-  border-color:#E7D5A4;
-  background:#FFF7DF;
+  border-color:#E0C567;
+  background:linear-gradient(180deg,#FFFDF6,#FFF7D9);
 }
 
 .monthly-report-a4-highlight>span{
   grid-row:1 / 3;
-  font-size:clamp(12px,2.6vw,21px);
+  width:clamp(24px,5.3vw,44px);
+  height:clamp(24px,5.3vw,44px);
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#F0F7E9;
+  font-size:clamp(12px,2.8vw,23px);
+}
+
+.monthly-report-a4-highlight.is-gold>span{
+  background:#FFF1BF;
 }
 
 .monthly-report-a4-highlight strong{
-  font-size:clamp(7px,1.45vw,11px);
+  color:#143728;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(7px,1.55vw,12.5px);
+  font-weight:900;
+  line-height:1.15;
 }
 
 .monthly-report-a4-highlight small{
-  color:#74796F;
-  font-size:clamp(5px,1vw,8px);
+  color:#77776D;
+  font-size:clamp(4.5px,.95vw,7.5px);
+  font-weight:700;
 }
+
+
+/* Chart */
 
 .monthly-report-a4-chart{
   flex:1 1 auto;
-  min-height:13%;
+  min-height:15.5%;
+  padding:0 1%;
+  border-radius:15px;
+  background:
+    linear-gradient(180deg,rgba(241,248,232,.62),rgba(255,255,255,.35));
+}
+
+.monthly-report-a4-chart .monthly-report-a4-section__heading{
+  margin-left:-1%;
+  margin-right:-1%;
 }
 
 .monthly-report-a4-chart__canvas{
   position:relative;
-  height:82%;
-  min-height:54px;
+  height:84%;
+  min-height:58px;
   overflow:hidden;
-  border-left:1px solid #CFCFC5;
-  border-bottom:1px solid #CFCFC5;
-  background:linear-gradient(180deg,rgba(234,243,237,.55),rgba(255,255,255,.35));
+  border:1px solid #DDE4D6;
+  border-radius:9px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.86),rgba(246,250,239,.75));
 }
 
 .monthly-report-a4-chart__guide{
   position:absolute;
-  left:0;
-  right:0;
+  left:6%;
+  right:2%;
   height:1px;
-  background:#E7E5DC;
+  background:#E4E7DD;
 }
 
-.monthly-report-a4-chart__guide:nth-child(1){top:25%}
-.monthly-report-a4-chart__guide:nth-child(2){top:50%}
-.monthly-report-a4-chart__guide:nth-child(3){top:75%}
+.monthly-report-a4-chart__guide:nth-child(1){top:24%}
+.monthly-report-a4-chart__guide:nth-child(2){top:49%}
+.monthly-report-a4-chart__guide:nth-child(3){top:74%}
 
 .monthly-report-a4-chart__placeholder{
   position:absolute;
   inset:0;
   display:grid;
   place-items:center;
-  color:#9AA29A;
-  font-size:clamp(7px,1.4vw,11px);
-  font-weight:700;
+  color:#92A091;
+  font-size:clamp(6px,1.25vw,10px);
+  font-weight:800;
 }
+
+
+/* Lifetime */
 
 .monthly-report-a4-lifetime{
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  gap:1%;
+  gap:.8%;
 }
 
 .monthly-report-a4-lifetime>div{
-  padding:3.4% 3%;
-  border-radius:8px;
-  background:#EDF4EE;
+  position:relative;
+  padding:4.2% 3%;
+  border:1px solid #D3E2CE;
+  border-radius:11px;
+  background:linear-gradient(180deg,#FDFFF9,#EDF6E7);
   text-align:center;
+  box-shadow:0 1px 5px rgba(46,87,54,.06);
+}
+
+.monthly-report-a4-lifetime>div:nth-child(2){
+  border-color:#EECBB2;
+  background:linear-gradient(180deg,#FFFDF9,#FFF0E6);
+}
+.monthly-report-a4-lifetime>div:nth-child(3){
+  border-color:#BDD8E8;
+  background:linear-gradient(180deg,#FDFFFF,#EAF4FB);
+}
+.monthly-report-a4-lifetime>div:nth-child(4){
+  border-color:#D3C5E6;
+  background:linear-gradient(180deg,#FFFEFF,#F4ECFA);
 }
 
 .monthly-report-a4-lifetime strong,
@@ -417,91 +759,215 @@ button{-webkit-tap-highlight-color:transparent}
 }
 
 .monthly-report-a4-lifetime strong{
-  color:#285E46;
-  font-size:clamp(8px,1.7vw,13px);
+  color:#12372A;
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(9px,2.1vw,17px);
+  line-height:1.05;
 }
 
 .monthly-report-a4-lifetime small{
-  margin-top:2%;
-  color:#687169;
-  font-size:clamp(5px,.98vw,8px);
-  line-height:1.2;
+  margin-top:3%;
+  color:#395448;
+  font-size:clamp(4.5px,.98vw,8px);
+  font-weight:800;
+  line-height:1.14;
 }
 
+
+/* Milestones */
+
 .monthly-report-a4-milestones{
+  position:relative;
   display:grid;
   grid-template-columns:repeat(5,1fr);
-  gap:1%;
+  gap:1.7%;
+  padding:2.1% 1% .8%;
+}
+
+.monthly-report-a4-milestones::before{
+  content:"";
+  position:absolute;
+  left:7%;
+  right:7%;
+  top:32%;
+  height:4px;
+  border-radius:999px;
+  background:linear-gradient(90deg,#58A84E 0 43%,#E0BD42 43% 55%,#C8CAC3 55% 100%);
 }
 
 .monthly-report-a4-milestone{
-  padding:3% 2%;
-  border-radius:8px;
+  position:relative;
+  z-index:1;
+  padding:0;
+  border-radius:0;
+  background:transparent!important;
   text-align:center;
 }
 
-.monthly-report-a4-milestone span,
+.monthly-report-a4-milestone span{
+  width:clamp(23px,5.3vw,44px);
+  height:clamp(23px,5.3vw,44px);
+  display:grid;
+  place-items:center;
+  margin:0 auto 5%;
+  border:3px solid #C7C9C2;
+  border-radius:50%;
+  background:#F5F5F0;
+  box-shadow:0 0 0 3px rgba(255,255,255,.8);
+  font-size:clamp(8px,1.7vw,14px);
+  font-weight:900;
+}
+
 .monthly-report-a4-milestone strong,
 .monthly-report-a4-milestone small{
   display:block;
 }
 
-.monthly-report-a4-milestone span{
-  font-size:clamp(7px,1.4vw,11px);
-}
-
 .monthly-report-a4-milestone strong{
-  margin-top:2%;
-  font-size:clamp(7px,1.35vw,11px);
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(7px,1.45vw,11.5px);
+  color:#333;
 }
 
 .monthly-report-a4-milestone small{
-  font-size:clamp(5px,.95vw,7px);
+  margin-top:2%;
+  font-size:clamp(4px,.83vw,6.5px);
+  font-weight:800;
+  color:#777;
 }
 
-.monthly-report-a4-milestone.is-achieved{
-  background:#E7F2E9;
-  color:#276047;
+.monthly-report-a4-milestone.is-achieved span{
+  border-color:#3C9A48;
+  background:#4CA954;
+  color:#fff;
 }
 
-.monthly-report-a4-milestone.is-next{
-  outline:2px solid #C7A34B;
-  outline-offset:-2px;
-  background:#FFF4D4;
-  color:#765917;
+.monthly-report-a4-milestone.is-achieved strong,
+.monthly-report-a4-milestone.is-achieved small{
+  color:#27653A;
+}
+
+.monthly-report-a4-milestone.is-next span{
+  border-color:#E7A716;
+  background:#FFF9E8;
+  color:#D98900;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.8),
+    0 0 0 5px rgba(234,167,22,.18);
+}
+
+.monthly-report-a4-milestone.is-next::before{
+  content:"次はここ！";
+  position:absolute;
+  left:50%;
+  top:-26%;
+  transform:translateX(-50%);
+  padding:2px 9px;
+  border-radius:999px;
+  background:#FF8428;
+  color:#fff;
+  font-size:clamp(4px,.85vw,7px);
   font-weight:900;
+  white-space:nowrap;
 }
 
-.monthly-report-a4-milestone.is-locked{
-  background:#F0EFE9;
-  color:#9A9B95;
+.monthly-report-a4-milestone.is-next strong,
+.monthly-report-a4-milestone.is-next small{
+  color:#A96600;
 }
+
+.monthly-report-a4-milestone.is-locked span{
+  color:#A7A8A2;
+}
+
+
+/* Handwritten comment */
 
 .monthly-report-a4-comment{
+  position:relative;
   margin-top:auto;
+  padding:1.4% 3% 1.6%;
+  border:1px solid #E3CF8A;
+  border-radius:13px;
+  background:rgba(255,253,246,.82);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.65);
+}
+
+.monthly-report-a4-comment::after{
+  content:"これからも\A素敵な一歩を\A応援しています。";
+  white-space:pre;
+  position:absolute;
+  right:3%;
+  bottom:12%;
+  color:#776B51;
+  font-family:"Yu Mincho","Hiragino Mincho ProN",serif;
+  font-size:clamp(4.5px,.95vw,7.5px);
+  font-weight:700;
+  line-height:1.45;
+  transform:rotate(-4deg);
+}
+
+.monthly-report-a4-comment .monthly-report-a4-section__title{
+  min-width:31%;
+  background:none;
+  box-shadow:none;
+  color:#173D2D;
+  padding:0;
+  border-radius:0;
+  font-size:clamp(8px,1.7vw,13.5px);
+}
+
+.monthly-report-a4-comment .monthly-report-a4-section__title::before{
+  content:"💬";
 }
 
 .monthly-report-a4-comment__lines{
-  padding:1.2% 1% 0;
+  width:82%;
+  padding:.8% 0 0;
 }
 
 .monthly-report-a4-comment__lines span{
   display:block;
-  height:clamp(12px,2.5vw,20px);
-  border-bottom:1px solid #D7D5CA;
+  height:clamp(10px,2.15vw,17px);
+  border-bottom:1px dashed #D0C6A8;
 }
+
+
+/* Mobile preview tuning */
 
 @media(max-width:380px){
   .monthly-report-sheet-wrapper{
     margin-left:-12px;
     margin-right:-12px;
-    padding-left:5px;
-    padding-right:5px;
+    padding-left:4px;
+    padding-right:4px;
   }
 
   .monthly-report-sheet__inner{
-    gap:.9%;
-    padding-left:3.5%;
-    padding-right:3.5%;
+    gap:.72%;
+    padding-left:2.2%;
+    padding-right:2.2%;
+  }
+
+  .monthly-report-a4-ribbon{
+    width:96%;
+  }
+
+  .monthly-report-a4-ribbon__body{
+    width:92%;
+    gap:.38%;
+  }
+
+  .monthly-report-a4-kpis{
+    gap:.55%;
+  }
+
+  .monthly-report-a4-kpi{
+    padding-left:2%;
+    padding-right:2%;
+  }
+
+  .monthly-report-a4-section__heading>small{
+    max-width:57%;
   }
 }
