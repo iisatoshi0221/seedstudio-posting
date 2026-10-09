@@ -4,7 +4,7 @@
   // ============================================================
   // SeedStudio Posting
   // app.js
-  // Phase 2 - Posting participant management
+  // Phase 4 - Firestore master management
   // ============================================================
 
   const STORAGE_KEY = "seedstudio-posting-v0.1-records";
@@ -17,26 +17,19 @@
   const DEFAULT_ZOOM = 14;
 
   // ============================================================
-  // Temporary local masters
+  // Firestore masters
   //
-  // Staff/FlyerはPhase 4でFirestore masterへ移行予定。
-  // ParticipantsはPhase 2からSSS共通 users + postingParticipants を使用。
+  // Phase 4:
+  // staff / flyers は Firestore の
+  // postingStaff / postingFlyers を正本として使用する。
+  //
+  // Participants は Phase 2 から
+  // users + postingParticipants を使用。
   // ============================================================
 
   const master = {
-    staff: [
-      { id: "S0006", name: "田島 雄弥" },
-      { id: "S0007", name: "山本 耕平" },
-      { id: "S0008", name: "井伊 啓" },
-      { id: "S0001", name: "大久保 和恵" }
-    ],
-
-    flyers: [
-      {
-        id: "F0001",
-        name: "SeedStudio 事業所案内 2026-10"
-      }
-    ]
+    staff: [],
+    flyers: []
   };
 
   // 過去の職員IDを履歴表示で解決するため保持
@@ -49,6 +42,12 @@
     S0006: "田島 雄弥",
     S0007: "山本 耕平",
     S0008: "井伊 啓"
+  };
+
+  // 過去履歴表示用の最低限の互換ラベル。
+  // 新規登録の候補には使用しない。
+  const legacyFlyerNames = {
+    F0001: "SeedStudio 事業所案内 2026-10"
   };
 
   // 旧Postingテストデータ表示互換
@@ -86,6 +85,10 @@
 
     participantLoading: false,
     participantError: null,
+
+    masterLoading: false,
+    masterReady: false,
+    masterError: null,
 
     mapPoints: [],
     draft: {},
@@ -188,6 +191,7 @@
     flyer(id) {
       return (
         master.flyers.find((item) => item.id === id)?.name ||
+        legacyFlyerNames[id] ||
         id
       );
     }
@@ -258,7 +262,9 @@
 
       permissionStatus.style.color = "#2F6D4F";
 
-      setRegistrationAvailability(true);
+      setRegistrationAvailability(
+        state.masterReady
+      );
     } else {
       permissionStatus.textContent =
         "このGoogleアカウントはSeedStudio職員として登録されていません";
@@ -346,7 +352,8 @@
 
         await Promise.all([
           this.reloadFromFirestore(),
-          participantRepository.reload()
+          participantRepository.reload(),
+          masterRepository.reload()
         ]);
       } catch (error) {
         console.error(
@@ -438,6 +445,127 @@
       }
     }
   };
+
+  // ============================================================
+  // Posting master repository
+  // ============================================================
+
+  const masterRepository = {
+    async reload() {
+      if (!state.authState.authorized) {
+        state.masterReady = false;
+        return;
+      }
+
+      state.masterLoading = true;
+      state.masterError = null;
+      state.masterReady = false;
+
+      try {
+        const [
+          staff,
+          flyers
+        ] =
+          await Promise.all([
+            window.SeedStudioFirestore
+              .listPostingStaff(),
+
+            window.SeedStudioFirestore
+              .listPostingFlyers()
+          ]);
+
+        master.staff =
+          (Array.isArray(staff)
+            ? staff
+            : []
+          ).map(
+            (item) => ({
+              id:
+                item.staffId,
+
+              name:
+                item.name,
+
+              active:
+                item.active === true,
+
+              displayOrder:
+                Number(
+                  item.displayOrder ||
+                  0
+                )
+            })
+          );
+
+        master.flyers =
+          (Array.isArray(flyers)
+            ? flyers
+            : []
+          ).map(
+            (item) => ({
+              id:
+                item.flyerId,
+
+              name:
+                item.name,
+
+              active:
+                item.active === true,
+
+              displayOrder:
+                Number(
+                  item.displayOrder ||
+                  0
+                )
+            })
+          );
+
+        const hasActiveStaff =
+          master.staff.some(
+            (item) =>
+              item.active
+          );
+
+        const hasActiveFlyer =
+          master.flyers.some(
+            (item) =>
+              item.active
+          );
+
+        state.masterReady =
+          hasActiveStaff &&
+          hasActiveFlyer;
+
+        renderMasters();
+        renderAuthState();
+
+      } catch (error) {
+        console.error(
+          "Posting master load failed.",
+          error
+        );
+
+        master.staff = [];
+        master.flyers = [];
+
+        state.masterError =
+          error;
+
+        state.masterReady =
+          false;
+
+        renderMasters();
+        renderAuthState();
+
+        throw error;
+
+      } finally {
+        state.masterLoading =
+          false;
+      }
+    }
+  };
+
 
   // ============================================================
   // Participant repository
@@ -1231,15 +1359,40 @@
   function resetDraft() {
     state.mapPoints = [];
 
+    const activeStaff =
+      master.staff.filter(
+        (item) =>
+          item.active
+      );
+
+    const preferredStaff =
+      activeStaff.find(
+        (item) =>
+          item.id ===
+          "S0006"
+      ) ||
+      activeStaff[0] ||
+      null;
+
+    const activeFlyers =
+      master.flyers.filter(
+        (item) =>
+          item.active
+      );
+
     state.draft = {
       postingDate:
         todayIso(),
 
       staffId:
-        "S0006",
+        preferredStaff
+          ?.id ||
+        "",
 
       flyerId:
-        master.flyers[0].id,
+        activeFlyers[0]
+          ?.id ||
+        "",
 
       participantIds:
         [],
@@ -1436,35 +1589,65 @@
     const staffSelect =
       $("#staffSelect");
 
+    const activeStaff =
+      master.staff.filter(
+        (item) =>
+          item.active
+      );
+
     if (staffSelect) {
-      staffSelect.innerHTML =
-        master.staff
-          .map(
-            (item) =>
-              `<option value="${escapeHtml(
-                item.id
-              )}">${escapeHtml(
-                item.name
-              )}</option>`
-          )
-          .join("");
+      if (
+        activeStaff.length
+      ) {
+        staffSelect.innerHTML =
+          activeStaff
+            .map(
+              (item) =>
+                `<option value="${escapeHtml(
+                  item.id
+                )}">${escapeHtml(
+                  item.name
+                )}</option>`
+            )
+            .join("");
+      } else {
+        staffSelect.innerHTML =
+          `<option value="">${state.masterLoading
+            ? "職員マスターを読み込み中..."
+            : "担当職員を読み込めません"}</option>`;
+      }
     }
 
     const flyerSelect =
       $("#flyerSelect");
 
+    const activeFlyers =
+      master.flyers.filter(
+        (item) =>
+          item.active
+      );
+
     if (flyerSelect) {
-      flyerSelect.innerHTML =
-        master.flyers
-          .map(
-            (item) =>
-              `<option value="${escapeHtml(
-                item.id
-              )}">${escapeHtml(
-                item.name
-              )}</option>`
-          )
-          .join("");
+      if (
+        activeFlyers.length
+      ) {
+        flyerSelect.innerHTML =
+          activeFlyers
+            .map(
+              (item) =>
+                `<option value="${escapeHtml(
+                  item.id
+                )}">${escapeHtml(
+                  item.name
+                )}</option>`
+            )
+            .join("");
+      } else {
+        flyerSelect.innerHTML =
+          `<option value="">${state.masterLoading
+            ? "チラシマスターを読み込み中..."
+            : "チラシを読み込めません"}</option>`;
+      }
     }
 
     renderParticipantUI();
@@ -1593,17 +1776,29 @@
   function validateStep1() {
     syncStep1();
 
-    const ok =
+    const participantOk =
       state.draft.participantIds
         .length > 0;
 
     $("#participantError")
       ?.classList.toggle(
         "is-hidden",
-        ok
+        participantOk
       );
 
-    return ok;
+    if (
+      !state.masterReady ||
+      !state.draft.staffId ||
+      !state.draft.flyerId
+    ) {
+      alert(
+        "担当職員またはチラシのマスターを読み込めません。画面を再読み込みしてください。"
+      );
+
+      return false;
+    }
+
+    return participantOk;
   }
 
   // ============================================================
@@ -3338,6 +3533,9 @@
             .reloadFromFirestore(),
 
           participantRepository
+            .reload(),
+
+          masterRepository
             .reload()
         ]);
 
@@ -3389,6 +3587,8 @@
 
     state.participantCandidates = [];
     state.postingParticipants = [];
+    state.masterReady = false;
+    state.masterError = null;
 
     dataRepository.mode =
       "auth-required";
@@ -3678,6 +3878,9 @@
                 .reloadFromFirestore(),
 
               participantRepository
+                .reload(),
+
+              masterRepository
                 .reload()
             ]);
 
