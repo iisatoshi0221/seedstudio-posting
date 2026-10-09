@@ -3621,6 +3621,329 @@
     renderMonthlyReportParticipantSelect();
   }
 
+  function renderMonthlyReportSheet(
+    stats,
+    participantName,
+    targetYm
+  ) {
+    const setText = (
+      selector,
+      value
+    ) => {
+      const element =
+        $(selector);
+
+      if (element) {
+        element.textContent =
+          value;
+      }
+    };
+
+    setText(
+      "#monthlyReportA4Name",
+      `${participantName}さん`
+    );
+
+    setText(
+      "#monthlyReportA4Month",
+      formatYmJa(
+        targetYm
+      )
+    );
+
+    setText(
+      "#monthlyReportA4Steps",
+      formatNumber(
+        stats.monthly.steps
+      )
+    );
+
+    setText(
+      "#monthlyReportA4Days",
+      `${formatNumber(
+        stats.monthly
+          .participationDays
+      )}日`
+    );
+
+    setText(
+      "#monthlyReportA4Average",
+      `${formatNumber(
+        stats.monthly
+          .averageDailySteps
+      )}歩`
+    );
+
+    setText(
+      "#monthlyReportA4Best",
+      `${formatNumber(
+        stats.monthly
+          .bestDailySteps
+      )}歩`
+    );
+
+    setText(
+      "#monthlyReportA4Calories",
+      `約${formatNumber(
+        stats.monthly.calories
+      )}kcal`
+    );
+
+    setText(
+      "#monthlyReportA4Quantity",
+      `${formatNumber(
+        stats.monthly
+          .relatedQuantity
+      )}部`
+    );
+
+    setText(
+      "#monthlyReportA4LifetimeSteps",
+      `${formatNumber(
+        stats.lifetime.steps
+      )}歩`
+    );
+
+    setText(
+      "#monthlyReportA4LifetimeCalories",
+      `約${formatNumber(
+        stats.lifetime.calories
+      )}kcal`
+    );
+
+    setText(
+      "#monthlyReportA4LifetimeDays",
+      `${formatNumber(
+        stats.lifetime
+          .participationDays
+      )}日`
+    );
+
+    setText(
+      "#monthlyReportA4LifetimeQuantity",
+      `${formatNumber(
+        stats.lifetime
+          .relatedQuantity
+      )}部`
+    );
+
+
+    // ----------------------------------------------------------
+    // Highlights
+    // Priority:
+    // 1. newly achieved milestone
+    // 2. best daily steps
+    // 3. previous-month difference when previous data exists
+    // ----------------------------------------------------------
+
+    const highlights =
+      [];
+
+    const newlyAchieved =
+      Array.isArray(
+        stats.milestones
+          .newlyAchieved
+      )
+        ? stats.milestones
+            .newlyAchieved
+        : [];
+
+    if (
+      newlyAchieved.length
+    ) {
+      const highest =
+        newlyAchieved[
+          newlyAchieved.length -
+          1
+        ];
+
+      highlights.push({
+        icon:
+          "🏅",
+
+        title:
+          `${formatNumber(
+            highest
+          )}歩達成！`,
+
+        detail:
+          newlyAchieved.length >
+          1
+            ? `今月${newlyAchieved.length}つのマイルストーンを達成`
+            : "マイルストーン達成",
+
+        gold:
+          true
+      });
+    }
+
+    highlights.push({
+      icon:
+        "🏆",
+
+      title:
+        `最高 ${formatNumber(
+          stats.monthly
+            .bestDailySteps
+        )}歩`,
+
+      detail:
+        "今月のベスト"
+    });
+
+    if (
+      stats.previousMonth
+        .hasActivity
+    ) {
+      const difference =
+        stats.previousMonth
+          .difference;
+
+      highlights.push({
+        icon:
+          difference >= 0
+            ? "↗"
+            : "↘",
+
+        title:
+          `先月より ${
+            difference > 0
+              ? "+"
+              : ""
+          }${formatNumber(
+            difference
+          )}歩`,
+
+        detail:
+          "前月比"
+      });
+    }
+
+    const highlightContainer =
+      $("#monthlyReportA4Highlights");
+
+    if (highlightContainer) {
+      highlightContainer.innerHTML =
+        highlights
+          .slice(0, 3)
+          .map(
+            (
+              highlight
+            ) => `
+              <div
+                class="monthly-report-a4-highlight${
+                  highlight.gold
+                    ? " is-gold"
+                    : ""
+                }"
+              >
+                <span>
+                  ${escapeHtml(
+                    highlight.icon
+                  )}
+                </span>
+
+                <strong>
+                  ${escapeHtml(
+                    highlight.title
+                  )}
+                </strong>
+
+                <small>
+                  ${escapeHtml(
+                    highlight.detail
+                  )}
+                </small>
+              </div>
+            `
+          )
+          .join("");
+    }
+
+
+    // ----------------------------------------------------------
+    // Milestones
+    // ----------------------------------------------------------
+
+    const milestoneContainer =
+      $("#monthlyReportA4Milestones");
+
+    if (
+      milestoneContainer
+    ) {
+      const allMilestones =
+        Array.isArray(
+          window
+            .SeedStudioMonthlyReport
+            ?.milestoneSteps
+        )
+          ? window
+              .SeedStudioMonthlyReport
+              .milestoneSteps
+          : milestoneSteps;
+
+      milestoneContainer.innerHTML =
+        allMilestones
+          .map(
+            (goal) => {
+              const achieved =
+                stats.lifetime
+                  .steps >=
+                goal;
+
+              const next =
+                !achieved &&
+                stats.milestones
+                  .nextGoal ===
+                goal;
+
+              const stateClass =
+                achieved
+                  ? "is-achieved"
+                  : next
+                    ? "is-next"
+                    : "is-locked";
+
+              const symbol =
+                achieved
+                  ? "✓"
+                  : next
+                    ? "→"
+                    : "○";
+
+              const label =
+                achieved
+                  ? "達成！"
+                  : next
+                    ? "次はここ！"
+                    : "目標";
+
+              return `
+                <div
+                  class="monthly-report-a4-milestone ${stateClass}"
+                >
+                  <span>
+                    ${symbol}
+                  </span>
+
+                  <strong>
+                    ${formatNumber(
+                      goal
+                    )}
+                  </strong>
+
+                  <small>
+                    歩・${label}
+                  </small>
+                </div>
+              `;
+            }
+          )
+          .join("");
+    }
+  }
+
+
   function renderMonthlyReportPreview() {
     const monthlyReport =
       window.SeedStudioMonthlyReport;
@@ -3817,9 +4140,12 @@
         "is-hidden"
       );
 
-    // MR-3A:
-    // A4レポート本体は、まず骨格だけを表示する。
-    // 実データの差し込みはMR-3Bで行う。
+    renderMonthlyReportSheet(
+      stats,
+      participantName,
+      targetYm
+    );
+
     $("#monthlyReportSheetWrapper")
       ?.classList.remove(
         "is-hidden"
