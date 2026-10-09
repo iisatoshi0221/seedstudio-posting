@@ -4,10 +4,11 @@
   // ============================================================
   // SeedStudio Posting
   // app.js
-  // Phase 4 - Firestore master management
+  // MVP - Firestore masters + resilient sync
   // ============================================================
 
   const STORAGE_KEY = "seedstudio-posting-v0.1-records";
+  const PENDING_STORAGE_KEY = "seedstudio-posting-v0.1-pending";
 
   const DEFAULT_CENTER = {
     lat: 35.6074,
@@ -79,6 +80,9 @@
 
     // Firestoreから取得したSSS利用者
     participantCandidates: [],
+
+    // 履歴・成果の氏名解決用。利用終了者も含む users 全件。
+    participantDirectory: [],
 
     // postingEnabled === true の利用者
     postingParticipants: [],
@@ -161,6 +165,9 @@
 
   function getParticipantById(id) {
     return (
+      state.participantDirectory.find(
+        (item) => item.personId === id
+      ) ||
       state.participantCandidates.find(
         (item) => item.personId === id
       ) ||
@@ -317,6 +324,205 @@
       );
     },
 
+    loadPending() {
+      const raw =
+        localStorage.getItem(
+          PENDING_STORAGE_KEY
+        );
+
+      if (!raw) {
+        return [];
+      }
+
+      try {
+        const records =
+          JSON.parse(raw);
+
+        return Array.isArray(records)
+          ? records
+          : [];
+      } catch (error) {
+        console.warn(
+          "Pending data parse failed.",
+          error
+        );
+
+        return [];
+      }
+    },
+
+    savePending(records) {
+      localStorage.setItem(
+        PENDING_STORAGE_KEY,
+        JSON.stringify(
+          Array.isArray(records)
+            ? records
+            : []
+        )
+      );
+    },
+
+    upsertCache(record) {
+      const index =
+        this.cache.findIndex(
+          (item) =>
+            item.id ===
+            record.id
+        );
+
+      if (index >= 0) {
+        this.cache[index] =
+          record;
+      } else {
+        this.cache.push(
+          record
+        );
+      }
+
+      this.cache.sort(
+        (a, b) =>
+          (b.postingDate || "")
+            .localeCompare(
+              a.postingDate || ""
+            )
+      );
+    },
+
+    mergeRecords(
+      primary,
+      secondary
+    ) {
+      const map =
+        new Map();
+
+      [
+        ...(primary || []),
+        ...(secondary || [])
+      ].forEach(
+        (record) => {
+          if (
+            record?.id
+          ) {
+            map.set(
+              record.id,
+              record
+            );
+          }
+        }
+      );
+
+      return [...map.values()]
+        .sort(
+          (a, b) =>
+            (b.postingDate || "")
+              .localeCompare(
+                a.postingDate || ""
+              )
+        );
+    },
+
+    addPending(record) {
+      const pending =
+        this.loadPending();
+
+      const index =
+        pending.findIndex(
+          (item) =>
+            item.id ===
+            record.id
+        );
+
+      if (index >= 0) {
+        pending[index] =
+          record;
+      } else {
+        pending.push(
+          record
+        );
+      }
+
+      this.savePending(
+        pending
+      );
+    },
+
+    async syncPending() {
+      if (
+        !state.authState.authorized ||
+        !window.SeedStudioFirestore
+      ) {
+        return {
+          synced: 0,
+          remaining:
+            this.loadPending()
+              .length
+        };
+      }
+
+      const pending =
+        this.loadPending();
+
+      if (!pending.length) {
+        this.mode =
+          "firestore";
+
+        return {
+          synced: 0,
+          remaining: 0
+        };
+      }
+
+      const remaining = [];
+      let synced = 0;
+
+      for (
+        const record of pending
+      ) {
+        try {
+          const saved =
+            await window.SeedStudioFirestore
+              .savePostingRecord(
+                record
+              );
+
+          this.upsertCache(
+            saved
+          );
+
+          synced += 1;
+        } catch (error) {
+          console.warn(
+            "Pending Posting sync failed.",
+            record?.id,
+            error
+          );
+
+          remaining.push(
+            record
+          );
+        }
+      }
+
+      this.savePending(
+        remaining
+      );
+
+      this.saveLocal(
+        this.cache
+      );
+
+      this.mode =
+        remaining.length
+          ? "pending"
+          : "firestore";
+
+      return {
+        synced,
+        remaining:
+          remaining.length
+      };
+    },
+
     async waitForFirebaseBridge(timeoutMs = 10000) {
       const started = Date.now();
 
@@ -387,41 +593,59 @@
       }
 
       const records =
-        await window.SeedStudioFirestore.listPostingRecords();
+        await window.SeedStudioFirestore
+          .listPostingRecords();
 
-      this.cache = records.sort(
-        (a, b) =>
-          (b.postingDate || "").localeCompare(
-            a.postingDate || ""
-          )
+      const pending =
+        this.loadPending();
+
+      // Firestore再読込時も未同期レコードを消さない。
+      // 同じIDの場合は pending 側を優先する。
+      this.cache =
+        this.mergeRecords(
+          records,
+          pending
+        );
+
+      this.mode =
+        pending.length
+          ? "pending"
+          : "firestore";
+
+      this.saveLocal(
+        this.cache
       );
 
-      this.mode = "firestore";
-      this.saveLocal(this.cache);
+      // 通信が復旧していれば、その場で再送する。
+      await this.syncPending();
     },
 
     async add(record) {
       if (!state.authState.authorized) {
-        throw new Error("LOGIN_REQUIRED");
+        throw new Error(
+          "LOGIN_REQUIRED"
+        );
       }
 
       try {
         const saved =
-          await window.SeedStudioFirestore.savePostingRecord(
-            record
-          );
+          await window.SeedStudioFirestore
+            .savePostingRecord(
+              record
+            );
 
-        this.cache.push(saved);
-
-        this.cache.sort(
-          (a, b) =>
-            (b.postingDate || "").localeCompare(
-              a.postingDate || ""
-            )
+        this.upsertCache(
+          saved
         );
 
-        this.saveLocal(this.cache);
-        this.mode = "firestore";
+        this.saveLocal(
+          this.cache
+        );
+
+        this.mode =
+          this.loadPending().length
+            ? "pending"
+            : "firestore";
 
         return {
           mode: "firestore",
@@ -433,13 +657,25 @@
           error
         );
 
-        this.cache.push(record);
-        this.saveLocal(this.cache);
+        // 保存失敗時は通常キャッシュとは別の
+        // 未同期キューにも必ず保持する。
+        this.addPending(
+          record
+        );
 
-        this.mode = "local";
+        this.upsertCache(
+          record
+        );
+
+        this.saveLocal(
+          this.cache
+        );
+
+        this.mode =
+          "pending";
 
         return {
-          mode: "local",
+          mode: "pending",
           record
         };
       }
@@ -585,13 +821,26 @@
       renderParticipantLoadingStates();
 
       try {
-        const candidates =
-          await window.SeedStudioFirestore
-            .listPostingParticipantCandidates();
+        const [
+          candidates,
+          directory
+        ] =
+          await Promise.all([
+            window.SeedStudioFirestore
+              .listPostingParticipantCandidates(),
+
+            window.SeedStudioFirestore
+              .listAllUsers()
+          ]);
 
         state.participantCandidates =
           Array.isArray(candidates)
             ? [...candidates]
+            : [];
+
+        state.participantDirectory =
+          Array.isArray(directory)
+            ? [...directory]
             : [];
 
         state.postingParticipants =
@@ -609,6 +858,7 @@
 
         state.participantError = error;
         state.participantCandidates = [];
+        state.participantDirectory = [];
         state.postingParticipants = [];
 
         renderParticipantUI();
@@ -2829,7 +3079,7 @@
                 record.storageMode ===
                 "firestore"
                   ? "Firestore（共有）"
-                  : "この端末（一時保存）"
+                  : "この端末（一時保存・同期待ち）"
               }
             </b>
           </div>
@@ -3586,6 +3836,7 @@
     };
 
     state.participantCandidates = [];
+    state.participantDirectory = [];
     state.postingParticipants = [];
     state.masterReady = false;
     state.masterError = null;
@@ -3843,6 +4094,36 @@
         "change",
         renderAchievements
       );
+
+    window.addEventListener(
+      "online",
+      async () => {
+        if (
+          !state.authState.authorized
+        ) {
+          return;
+        }
+
+        try {
+          const result =
+            await dataRepository
+              .syncPending();
+
+          if (
+            result.synced > 0
+          ) {
+            renderHome();
+            renderHistory();
+            renderAchievements();
+          }
+        } catch (error) {
+          console.warn(
+            "Online pending sync failed.",
+            error
+          );
+        }
+      }
+    );
   }
 
   // ============================================================
