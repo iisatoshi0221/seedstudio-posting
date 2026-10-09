@@ -971,3 +971,168 @@ button{-webkit-tap-highlight-color:transparent}
     max-width:57%;
   }
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E image template mode
+   The artwork is fixed in monthly-report-template.jpg.
+   Variable values are overlaid in percentage coordinates.
+   ============================================================ */
+
+.monthly-report-template{
+  position:relative;
+  width:100%;
+  max-width:210mm;
+  aspect-ratio:1055 / 1491;
+  margin:0 auto;
+  overflow:hidden;
+  background:#fffdf5;
+  box-shadow:
+    0 18px 42px rgba(34,52,39,.20),
+    0 2px 8px rgba(34,52,39,.10);
+}
+
+.monthly-report-template__background{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:fill;
+  user-select:none;
+  pointer-events:none;
+}
+
+.monthly-report-template__overlay{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  font-family:"Yu Mincho","Hiragino Mincho ProN","Yu Gothic",serif;
+  color:#103B2C;
+}
+
+.monthly-report-template__field{
+  position:absolute;
+  text-align:center;
+  font-weight:900;
+  line-height:1;
+  white-space:nowrap;
+}
+
+/* MR-3E-1 provisional coordinates.
+   Exact coordinate tuning follows in MR-3E-2. */
+.monthly-report-template__title{
+  left:15%;
+  top:10.5%;
+  width:70%;
+  font-size:clamp(10px,2.65vw,22px);
+}
+
+.monthly-report-template__title-of{
+  margin:0 .2em;
+}
+
+.monthly-report-template__title-record{
+  margin-left:.35em;
+  font-family:Georgia,"Times New Roman",serif;
+}
+
+.monthly-report-template__monthly-steps{
+  left:27%;
+  top:21.2%;
+  width:46%;
+  color:#005B3B;
+  font-family:Georgia,"Times New Roman","Yu Mincho",serif;
+  font-size:clamp(28px,8.5vw,70px);
+}
+
+.monthly-report-template__monthly-steps::after{
+  content:"歩";
+  margin-left:.1em;
+  font-size:.38em;
+}
+
+.monthly-report-template__kpi{
+  top:33.8%;
+  width:16.2%;
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(8px,2.2vw,18px);
+}
+
+.monthly-report-template__kpi--days{left:4.2%}
+.monthly-report-template__kpi--average{left:23.2%}
+.monthly-report-template__kpi--best{left:42.1%}
+.monthly-report-template__kpi--calories{left:61.1%}
+.monthly-report-template__kpi--quantity{left:80%}
+
+.monthly-report-template__highlights{
+  position:absolute;
+  left:4.3%;
+  top:41.8%;
+  width:91.4%;
+  height:6.2%;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:1.2%;
+}
+
+.monthly-report-template__highlights .monthly-report-a4-highlight{
+  border:0;
+  box-shadow:none;
+  background:transparent;
+  min-height:0;
+  padding:0 4%;
+}
+
+.monthly-report-template__chart{
+  position:absolute;
+  left:10.2%;
+  top:53.2%;
+  width:84.8%;
+  height:9.2%;
+}
+
+.monthly-report-template__lifetime{
+  top:71.1%;
+  width:20.4%;
+  font-family:Georgia,"Yu Mincho",serif;
+  font-size:clamp(8px,2.1vw,17px);
+}
+
+.monthly-report-template__lifetime--steps{left:5.1%}
+.monthly-report-template__lifetime--calories{left:27.4%}
+.monthly-report-template__lifetime--days{left:51.4%}
+.monthly-report-template__lifetime--quantity{left:75.1%}
+
+.monthly-report-template__milestones{
+  position:absolute;
+  left:8.6%;
+  top:79.2%;
+  width:82.8%;
+  height:7.8%;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  align-items:start;
+  gap:2.6%;
+}
+
+.monthly-report-template__milestones .monthly-report-a4-milestone{
+  background:transparent!important;
+}
+
+@media(max-width:380px){
+  .monthly-report-template__title{
+    font-size:clamp(8px,2.45vw,18px);
+  }
+
+  .monthly-report-template__monthly-steps{
+    font-size:clamp(24px,8.1vw,58px);
+  }
+
+  .monthly-report-template__kpi,
+  .monthly-report-template__lifetime{
+    font-size:clamp(6px,1.85vw,14px);
+  }
+}
