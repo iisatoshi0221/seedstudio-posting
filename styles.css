@@ -1197,7 +1197,7 @@ button{-webkit-tap-highlight-color:transparent}
 
 .monthly-report-template__title{
   left:150px;
-  top:151px;
+  top:156px;
   width:755px;
   height:62px;
   color:#103B2C;
@@ -1215,7 +1215,7 @@ button{-webkit-tap-highlight-color:transparent}
 
 .monthly-report-template__monthly-steps{
   left:285px;
-  top:323px;
+  top:334px;
   width:485px;
   height:88px;
   color:#005B3B;
@@ -1241,7 +1241,7 @@ button{-webkit-tap-highlight-color:transparent}
 /* Monthly KPI values */
 
 .monthly-report-template__kpi{
-  top:477px;
+  top:487px;
   width:185px;
   height:50px;
   color:#102E24;
@@ -1279,7 +1279,7 @@ button{-webkit-tap-highlight-color:transparent}
 .monthly-report-template__highlights{
   position:absolute;
   left:50px;
-  top:603px;
+  top:621px;
   width:954px;
   height:84px;
   display:block;
@@ -1336,7 +1336,7 @@ button{-webkit-tap-highlight-color:transparent}
 /* Lifetime values only */
 
 .monthly-report-template__lifetime{
-  top:1010px;
+  top:1022px;
   width:220px;
   height:52px;
   color:#12372A;
@@ -1370,7 +1370,7 @@ button{-webkit-tap-highlight-color:transparent}
 .monthly-report-template__milestones{
   position:absolute;
   left:91px;
-  top:1165px;
+  top:1172px;
   width:874px;
   height:102px;
   display:grid;
@@ -1455,3 +1455,10 @@ button{-webkit-tap-highlight-color:transparent}
     font-size:revert;
   }
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2B
+   Final vertical alignment tuning from production screenshot.
+   Horizontal coordinates remain unchanged.
+   ============================================================ */
