@@ -3518,6 +3518,11 @@
       ?.classList.add(
         "is-hidden"
       );
+
+    $("#monthlyReportSheetWrapper")
+      ?.classList.add(
+        "is-hidden"
+      );
   }
 
   function renderMonthlyReportParticipantSelect() {
@@ -3808,6 +3813,14 @@
     }
 
     $("#monthlyReportPreview")
+      ?.classList.remove(
+        "is-hidden"
+      );
+
+    // MR-3A:
+    // A4レポート本体は、まず骨格だけを表示する。
+    // 実データの差し込みはMR-3Bで行う。
+    $("#monthlyReportSheetWrapper")
       ?.classList.remove(
         "is-hidden"
       );
