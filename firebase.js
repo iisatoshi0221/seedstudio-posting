@@ -718,6 +718,48 @@ function normalizeActiveUser(
 
 
 // ============================================================
+// User directory helper
+//
+// 履歴の氏名解決用。
+// active / startDate / endDate に関係なく users 全件を読む。
+// ============================================================
+
+function normalizeUserDirectoryItem(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data();
+
+  const personId =
+    data.userId ||
+    documentSnapshot.id;
+
+  return {
+    personId,
+
+    userId:
+      data.userId ||
+      documentSnapshot.id,
+
+    name:
+      data.name ||
+      personId,
+
+    active:
+      data.active === true,
+
+    startDate:
+      data.startDate ||
+      null,
+
+    endDate:
+      data.endDate ??
+      null
+  };
+}
+
+
+// ============================================================
 // Posting participant helpers
 // ============================================================
 
@@ -1085,6 +1127,45 @@ window.SeedStudioFirestore = {
   // 将来、体験フェーズのPersonの正本が確定したら、
   // phase:"TRIAL" のデータをここへ合流する。
   // ------------------------------------------------------------
+
+  async listAllUsers() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "users"
+        )
+      );
+
+    return snapshot.docs
+      .map(
+        normalizeUserDirectoryItem
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          String(
+            a.name
+          ).localeCompare(
+            String(
+              b.name
+            ),
+            "ja"
+          )
+      );
+  },
+
 
   async listActiveUsers() {
     const user =
