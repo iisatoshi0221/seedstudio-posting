@@ -1731,6 +1731,9 @@
       achievements:
         "みんなの成果",
 
+      "monthly-report":
+        "月間成果レポート",
+
       history:
         "配布履歴"
     };
@@ -1782,6 +1785,13 @@
       renderAchievements();
     }
 
+    if (
+      view ===
+      "monthly-report"
+    ) {
+      initializeMonthlyReportSelection();
+    }
+
     if (view === "history") {
       renderHistory();
     }
@@ -1817,6 +1827,9 @@
         "home",
 
       achievements:
+        "home",
+
+      "monthly-report":
         "home",
 
       history:
@@ -3399,6 +3412,410 @@
   }
 
   // ============================================================
+  // Monthly report selector / preview
+  // Phase MR-2
+  // ============================================================
+
+  function formatYmJa(ym) {
+    if (
+      typeof ym !== "string" ||
+      !/^\d{4}-\d{2}$/.test(ym)
+    ) {
+      return ym || "";
+    }
+
+    return `${Number(
+      ym.slice(0, 4)
+    )}年${Number(
+      ym.slice(5, 7)
+    )}月`;
+  }
+
+  function getMonthlyReportParticipants(
+    targetYm
+  ) {
+    const monthlyReport =
+      window.SeedStudioMonthlyReport;
+
+    if (
+      !monthlyReport ||
+      !targetYm
+    ) {
+      return [];
+    }
+
+    const ids =
+      new Set();
+
+    dataRepository
+      .load()
+      .forEach(
+        (record) => {
+          if (
+            !monthlyReport
+              .isValidIsoDate(
+                record?.postingDate
+              ) ||
+            record.postingDate
+              .slice(0, 7) !==
+              targetYm
+          ) {
+            return;
+          }
+
+          (
+            Array.isArray(
+              record.participants
+            )
+              ? record.participants
+              : []
+          ).forEach(
+            (participant) => {
+              const participantId =
+                participant
+                  ?.participantId;
+
+              if (
+                typeof participantId ===
+                  "string" &&
+                participantId.trim()
+              ) {
+                ids.add(
+                  participantId.trim()
+                );
+              }
+            }
+          );
+        }
+      );
+
+    return [...ids]
+      .map(
+        (participantId) => ({
+          participantId,
+
+          name:
+            names.participant(
+              participantId
+            )
+        })
+      )
+      .sort(
+        (a, b) =>
+          String(
+            a.name || ""
+          ).localeCompare(
+            String(
+              b.name || ""
+            ),
+            "ja"
+          )
+      );
+  }
+
+  function hideMonthlyReportPreview() {
+    $("#monthlyReportPreview")
+      ?.classList.add(
+        "is-hidden"
+      );
+  }
+
+  function renderMonthlyReportParticipantSelect() {
+    const monthInput =
+      $("#monthlyReportMonthInput");
+
+    const select =
+      $("#monthlyReportParticipantSelect");
+
+    const empty =
+      $("#monthlyReportParticipantEmpty");
+
+    const previewButton =
+      $("#monthlyReportPreviewButton");
+
+    if (
+      !monthInput ||
+      !select
+    ) {
+      return;
+    }
+
+    const targetYm =
+      monthInput.value ||
+      currentYm();
+
+    if (!monthInput.value) {
+      monthInput.value =
+        targetYm;
+    }
+
+    const previous =
+      select.value;
+
+    const participants =
+      getMonthlyReportParticipants(
+        targetYm
+      );
+
+    select.innerHTML =
+      participants
+        .map(
+          (person) =>
+            `<option value="${escapeHtml(
+              person.participantId
+            )}">${escapeHtml(
+              person.name
+            )}</option>`
+        )
+        .join("");
+
+    if (
+      previous &&
+      participants.some(
+        (person) =>
+          person.participantId ===
+          previous
+      )
+    ) {
+      select.value =
+        previous;
+    }
+
+    const hasParticipants =
+      participants.length > 0;
+
+    select.disabled =
+      !hasParticipants;
+
+    if (previewButton) {
+      previewButton.disabled =
+        !hasParticipants;
+    }
+
+    empty?.classList.toggle(
+      "is-hidden",
+      hasParticipants
+    );
+
+    hideMonthlyReportPreview();
+  }
+
+  function initializeMonthlyReportSelection() {
+    const monthInput =
+      $("#monthlyReportMonthInput");
+
+    if (!monthInput) {
+      return;
+    }
+
+    if (!monthInput.value) {
+      monthInput.value =
+        currentYm();
+    }
+
+    renderMonthlyReportParticipantSelect();
+  }
+
+  function renderMonthlyReportPreview() {
+    const monthlyReport =
+      window.SeedStudioMonthlyReport;
+
+    const targetYm =
+      $("#monthlyReportMonthInput")
+        ?.value ||
+      "";
+
+    const participantId =
+      $("#monthlyReportParticipantSelect")
+        ?.value ||
+      "";
+
+    if (
+      !monthlyReport ||
+      !targetYm ||
+      !participantId
+    ) {
+      hideMonthlyReportPreview();
+      return;
+    }
+
+    let stats;
+
+    try {
+      stats =
+        monthlyReport
+          .buildMonthlyReportStats(
+            dataRepository.load(),
+            participantId,
+            targetYm
+          );
+    } catch (error) {
+      console.error(
+        "Monthly report aggregation failed.",
+        error
+      );
+
+      alert(
+        "月間成果を集計できませんでした。"
+      );
+
+      return;
+    }
+
+    if (
+      stats.monthly
+        .participationDays <=
+      0
+    ) {
+      hideMonthlyReportPreview();
+
+      alert(
+        "この月のポスティング実績はありません。"
+      );
+
+      return;
+    }
+
+    const participantName =
+      names.participant(
+        participantId
+      );
+
+    if ($("#monthlyReportPreviewTitle")) {
+      $("#monthlyReportPreviewTitle").textContent =
+        `${participantName}さん・${formatYmJa(
+          targetYm
+        )}`;
+    }
+
+    if ($("#monthlyReportSteps")) {
+      $("#monthlyReportSteps").textContent =
+        `${formatNumber(
+          stats.monthly.steps
+        )}歩`;
+    }
+
+    if ($("#monthlyReportDays")) {
+      $("#monthlyReportDays").textContent =
+        `${formatNumber(
+          stats.monthly
+            .participationDays
+        )}日`;
+    }
+
+    if ($("#monthlyReportAverage")) {
+      $("#monthlyReportAverage").textContent =
+        `${formatNumber(
+          stats.monthly
+            .averageDailySteps
+        )}歩`;
+    }
+
+    if ($("#monthlyReportBest")) {
+      $("#monthlyReportBest").textContent =
+        `${formatNumber(
+          stats.monthly
+            .bestDailySteps
+        )}歩`;
+    }
+
+    if ($("#monthlyReportCalories")) {
+      $("#monthlyReportCalories").textContent =
+        `約${formatNumber(
+          stats.monthly.calories
+        )}kcal`;
+    }
+
+    if ($("#monthlyReportQuantity")) {
+      $("#monthlyReportQuantity").textContent =
+        `${formatNumber(
+          stats.monthly
+            .relatedQuantity
+        )}部`;
+    }
+
+    const previousRow =
+      $("#monthlyReportPreviousRow");
+
+    if (previousRow) {
+      if (
+        stats.previousMonth
+          .hasActivity
+      ) {
+        const difference =
+          stats.previousMonth
+            .difference;
+
+        previousRow.textContent =
+          `前月比：${
+            difference > 0
+              ? "+"
+              : ""
+          }${formatNumber(
+            difference
+          )}歩`;
+
+        previousRow.classList.remove(
+          "is-hidden"
+        );
+      } else {
+        previousRow.classList.add(
+          "is-hidden"
+        );
+      }
+    }
+
+    if ($("#monthlyReportLifetimeRow")) {
+      $("#monthlyReportLifetimeRow").textContent =
+        `対象月末までの累計：${formatNumber(
+          stats.lifetime.steps
+        )}歩・${formatNumber(
+          stats.lifetime
+            .participationDays
+        )}日参加`;
+    }
+
+    if ($("#monthlyReportMilestoneRow")) {
+      const newlyAchieved =
+        stats.milestones
+          .newlyAchieved;
+
+      if (
+        newlyAchieved.length
+      ) {
+        $("#monthlyReportMilestoneRow").textContent =
+          `今月達成：${newlyAchieved
+            .map(
+              (goal) =>
+                `${formatNumber(
+                  goal
+                )}歩`
+            )
+            .join("・")}`;
+      } else if (
+        stats.milestones
+          .nextGoal
+      ) {
+        $("#monthlyReportMilestoneRow").textContent =
+          `次の目標：${formatNumber(
+            stats.milestones
+              .nextGoal
+          )}歩`;
+      } else {
+        $("#monthlyReportMilestoneRow").textContent =
+          "すべてのマイルストーンを達成しています！";
+      }
+    }
+
+    $("#monthlyReportPreview")
+      ?.classList.remove(
+        "is-hidden"
+      );
+  }
+
+
+
+  // ============================================================
   // Achievements
   // ============================================================
 
@@ -4094,6 +4511,26 @@
         "change",
         renderAchievements
       );
+
+    $("#monthlyReportMonthInput")
+      ?.addEventListener(
+        "change",
+        renderMonthlyReportParticipantSelect
+      );
+
+    $("#monthlyReportParticipantSelect")
+      ?.addEventListener(
+        "change",
+        hideMonthlyReportPreview
+      );
+
+    $("#monthlyReportPreviewButton")
+      ?.addEventListener(
+        "click",
+        renderMonthlyReportPreview
+      );
+
+
 
     window.addEventListener(
       "online",
