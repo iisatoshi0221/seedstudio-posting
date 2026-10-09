@@ -1136,3 +1136,322 @@ button{-webkit-tap-highlight-color:transparent}
     font-size:clamp(6px,1.85vw,14px);
   }
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2
+   Fixed 1055 x 1491 virtual canvas + precise overlay positions.
+   Rule: if artwork already exists in the background image,
+   do not redraw it in CSS/HTML.
+   ============================================================ */
+
+.monthly-report-sheet-wrapper{
+  box-sizing:border-box;
+  position:relative;
+  width:100%;
+  margin:22px 0 0;
+  padding:8px;
+  overflow:hidden;
+}
+
+.monthly-report-template{
+  width:1055px;
+  max-width:none;
+  height:1491px;
+  aspect-ratio:auto;
+  margin:0;
+  flex:none;
+  overflow:hidden;
+  box-shadow:
+    0 12px 28px rgba(34,52,39,.17);
+}
+
+.monthly-report-template__overlay{
+  width:1055px;
+  height:1491px;
+  font-family:
+    "Yu Mincho",
+    "Hiragino Mincho ProN",
+    "Yu Gothic",
+    serif;
+}
+
+.monthly-report-template__field{
+  position:absolute;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:0;
+  padding:0;
+  white-space:nowrap;
+  line-height:1;
+  text-align:center;
+  font-weight:900;
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.55);
+}
+
+
+/* Gold ribbon title */
+
+.monthly-report-template__title{
+  left:150px;
+  top:151px;
+  width:755px;
+  height:62px;
+  color:#103B2C;
+  font-size:34px;
+  font-family:
+    "Yu Mincho",
+    "Hiragino Mincho ProN",
+    Georgia,
+    serif;
+  letter-spacing:.01em;
+}
+
+
+/* Main monthly steps */
+
+.monthly-report-template__monthly-steps{
+  left:285px;
+  top:323px;
+  width:485px;
+  height:88px;
+  color:#005B3B;
+  font-size:78px;
+  font-family:
+    Georgia,
+    "Times New Roman",
+    "Yu Mincho",
+    serif;
+}
+
+.monthly-report-template__monthly-steps::after{
+  content:"歩";
+  margin-left:9px;
+  font-size:28px;
+  font-family:
+    "Yu Mincho",
+    "Hiragino Mincho ProN",
+    serif;
+}
+
+
+/* Monthly KPI values */
+
+.monthly-report-template__kpi{
+  top:477px;
+  width:185px;
+  height:50px;
+  color:#102E24;
+  font-size:29px;
+  font-family:
+    Georgia,
+    "Yu Mincho",
+    serif;
+}
+
+.monthly-report-template__kpi--days{
+  left:39px;
+}
+
+.monthly-report-template__kpi--average{
+  left:235px;
+}
+
+.monthly-report-template__kpi--best{
+  left:430px;
+}
+
+.monthly-report-template__kpi--calories{
+  left:626px;
+  font-size:27px;
+}
+
+.monthly-report-template__kpi--quantity{
+  left:823px;
+}
+
+
+/* Highlight values only - cards/icons/labels are in template image */
+
+.monthly-report-template__highlights{
+  position:absolute;
+  left:50px;
+  top:603px;
+  width:954px;
+  height:84px;
+  display:block;
+}
+
+.monthly-report-template__highlight-value{
+  position:absolute;
+  top:0;
+  width:300px;
+  height:84px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  padding:18px 18px 5px 78px;
+  color:#12372A;
+  font-family:
+    "Yu Mincho",
+    "Hiragino Mincho ProN",
+    Georgia,
+    serif;
+  font-size:26px;
+  font-weight:900;
+  line-height:1.15;
+  text-align:center;
+  white-space:normal;
+}
+
+.monthly-report-template__highlight-value--best{
+  left:0;
+}
+
+.monthly-report-template__highlight-value--previous{
+  left:327px;
+}
+
+.monthly-report-template__highlight-value--achievement{
+  left:654px;
+  font-size:22px;
+}
+
+
+/* Chart drawing area */
+
+.monthly-report-template__chart{
+  position:absolute;
+  left:108px;
+  top:790px;
+  width:888px;
+  height:126px;
+}
+
+
+/* Lifetime values only */
+
+.monthly-report-template__lifetime{
+  top:1010px;
+  width:220px;
+  height:52px;
+  color:#12372A;
+  font-size:29px;
+  font-family:
+    Georgia,
+    "Yu Mincho",
+    serif;
+}
+
+.monthly-report-template__lifetime--steps{
+  left:52px;
+}
+
+.monthly-report-template__lifetime--calories{
+  left:290px;
+  font-size:27px;
+}
+
+.monthly-report-template__lifetime--days{
+  left:537px;
+}
+
+.monthly-report-template__lifetime--quantity{
+  left:786px;
+}
+
+
+/* Milestone state overlays only */
+
+.monthly-report-template__milestones{
+  position:absolute;
+  left:91px;
+  top:1165px;
+  width:874px;
+  height:102px;
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:0;
+  align-items:start;
+}
+
+.monthly-report-template__milestone-state{
+  position:relative;
+  height:102px;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+}
+
+.monthly-report-template__milestone-state>span{
+  width:46px;
+  height:46px;
+  margin-top:7px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  border-radius:50%;
+  font-size:28px;
+  font-family:Arial,sans-serif;
+  font-weight:900;
+}
+
+.monthly-report-template__milestone-state.is-achieved>span{
+  border:3px solid #318E3E;
+  background:#48A950;
+  color:#fff;
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,.80);
+}
+
+.monthly-report-template__milestone-state.is-next>span{
+  border:4px solid #F0A51C;
+  background:rgba(255,250,231,.96);
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,.82);
+}
+
+.monthly-report-template__milestone-state>small{
+  position:absolute;
+  top:-18px;
+  left:50%;
+  transform:translateX(-50%);
+  padding:5px 15px;
+  border-radius:999px;
+  background:#FF7D22;
+  color:#fff;
+  font-family:
+    "Yu Gothic",
+    sans-serif;
+  font-size:15px;
+  font-weight:900;
+  white-space:nowrap;
+  box-shadow:0 2px 4px rgba(121,74,10,.15);
+}
+
+
+/* Old CSS-drawn report artwork must not appear in template mode. */
+
+.monthly-report-template
+.monthly-report-a4-highlight,
+.monthly-report-template
+.monthly-report-a4-milestone{
+  all:unset;
+}
+
+
+/* The virtual canvas is scaled by JS, not responsive reflow. */
+
+@media(max-width:380px){
+  .monthly-report-template__title,
+  .monthly-report-template__monthly-steps,
+  .monthly-report-template__kpi,
+  .monthly-report-template__lifetime{
+    font-size:revert;
+  }
+}
