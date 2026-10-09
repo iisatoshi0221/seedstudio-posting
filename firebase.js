@@ -32,8 +32,8 @@ import {
 // SeedStudio Posting
 // Firebase bridge
 //
-// Phase 2
-// Posting participant management
+// Phase 4
+// Posting participant + master management
 // ============================================================
 
 
@@ -755,10 +755,216 @@ function normalizePostingParticipant(
 
 
 // ============================================================
+// Phase 4
+// Posting master normalization
+// ============================================================
+
+function normalizePostingStaff(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data();
+
+  return {
+    staffId:
+      data.staffId ||
+      documentSnapshot.id,
+
+    name:
+      data.name ||
+      "",
+
+    active:
+      data.active === true,
+
+    displayOrder:
+      Number.isFinite(
+        Number(
+          data.displayOrder
+        )
+      )
+        ? Number(
+            data.displayOrder
+          )
+        : 9999,
+
+    createdAt:
+      data.createdAt ||
+      null,
+
+    createdByUid:
+      data.createdByUid ||
+      null,
+
+    updatedAt:
+      data.updatedAt ||
+      null,
+
+    updatedByUid:
+      data.updatedByUid ||
+      null
+  };
+}
+
+
+function normalizePostingFlyer(
+  documentSnapshot
+) {
+  const data =
+    documentSnapshot.data();
+
+  return {
+    flyerId:
+      data.flyerId ||
+      documentSnapshot.id,
+
+    name:
+      data.name ||
+      "",
+
+    active:
+      data.active === true,
+
+    displayOrder:
+      Number.isFinite(
+        Number(
+          data.displayOrder
+        )
+      )
+        ? Number(
+            data.displayOrder
+          )
+        : 9999,
+
+    createdAt:
+      data.createdAt ||
+      null,
+
+    createdByUid:
+      data.createdByUid ||
+      null,
+
+    updatedAt:
+      data.updatedAt ||
+      null,
+
+    updatedByUid:
+      data.updatedByUid ||
+      null
+  };
+}
+
+
+// ============================================================
 // Firestore bridge
 // ============================================================
 
 window.SeedStudioFirestore = {
+
+  // ==========================================================
+  // Phase 4
+  // Posting staff / flyer masters
+  // ==========================================================
+
+  async listPostingStaff() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "postingStaff"
+        )
+      );
+
+    return snapshot.docs
+      .map(
+        normalizePostingStaff
+      )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          const orderDiff =
+            a.displayOrder -
+            b.displayOrder;
+
+          if (
+            orderDiff !== 0
+          ) {
+            return orderDiff;
+          }
+
+          return String(
+            a.name
+          ).localeCompare(
+            String(
+              b.name
+            ),
+            "ja"
+          );
+        }
+      );
+  },
+
+
+  async listPostingFlyers() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "postingFlyers"
+        )
+      );
+
+    return snapshot.docs
+      .map(
+        normalizePostingFlyer
+      )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          const orderDiff =
+            a.displayOrder -
+            b.displayOrder;
+
+          if (
+            orderDiff !== 0
+          ) {
+            return orderDiff;
+          }
+
+          return String(
+            a.name
+          ).localeCompare(
+            String(
+              b.name
+            ),
+            "ja"
+          );
+        }
+      );
+  },
+
 
   // ------------------------------------------------------------
   // Load all posting records
@@ -1208,6 +1414,9 @@ console.log(
       "Firestore:{lng,lat} / App:[lng,lat]",
 
     postingParticipants:
-      "Phase 2 bridge enabled"
+      "Phase 2 bridge enabled",
+
+    postingMasters:
+      "Phase 4 bridge enabled"
   }
 );
