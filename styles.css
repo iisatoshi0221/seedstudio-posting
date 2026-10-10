@@ -1755,3 +1755,31 @@ button{-webkit-tap-highlight-color:transparent}
     display:block!important;
   }
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3F-1
+   Lifetime value future-proof positioning.
+   Reserve more room for the fixed icon area on the left of each
+   cumulative card, while preserving each card's original right edge.
+   ============================================================ */
+
+.monthly-report-template__lifetime{
+  width:190px;
+}
+
+.monthly-report-template__lifetime--steps{
+  left:82px;
+}
+
+.monthly-report-template__lifetime--calories{
+  left:320px;
+}
+
+.monthly-report-template__lifetime--days{
+  left:567px;
+}
+
+.monthly-report-template__lifetime--quantity{
+  left:816px;
+}
