@@ -3519,6 +3519,11 @@
         "is-hidden"
       );
 
+    $("#monthlyReportPrintActions")
+      ?.classList.add(
+        "is-hidden"
+      );
+
     $("#monthlyReportSheetWrapper")
       ?.classList.add(
         "is-hidden"
@@ -4082,6 +4087,56 @@
   }
 
 
+  async function printMonthlyReport() {
+    const wrapper =
+      $("#monthlyReportSheetWrapper");
+
+    const sheet =
+      $("#monthlyReportSheet");
+
+    if (
+      !wrapper ||
+      !sheet ||
+      wrapper.classList.contains(
+        "is-hidden"
+      )
+    ) {
+      return;
+    }
+
+    const backgroundImage =
+      sheet.querySelector(
+        ".monthly-report-template__background"
+      );
+
+    try {
+      if (
+        backgroundImage &&
+        !backgroundImage.complete &&
+        typeof backgroundImage.decode ===
+          "function"
+      ) {
+        await backgroundImage.decode();
+      }
+    } catch (error) {
+      console.warn(
+        "Monthly report background decode failed before print.",
+        error
+      );
+    }
+
+    document.body.classList.add(
+      "is-printing-monthly-report"
+    );
+
+    requestAnimationFrame(
+      () => {
+        window.print();
+      }
+    );
+  }
+
+
   function renderMonthlyReportPreview() {
     const monthlyReport =
       window.SeedStudioMonthlyReport;
@@ -4274,6 +4329,11 @@
     }
 
     $("#monthlyReportPreview")
+      ?.classList.remove(
+        "is-hidden"
+      );
+
+    $("#monthlyReportPrintActions")
       ?.classList.remove(
         "is-hidden"
       );
@@ -5007,6 +5067,22 @@
         renderMonthlyReportPreview
       );
 
+    $("#monthlyReportPrintButton")
+      ?.addEventListener(
+        "click",
+        printMonthlyReport
+      );
+
+    window.addEventListener(
+      "afterprint",
+      () => {
+        document.body.classList.remove(
+          "is-printing-monthly-report"
+        );
+
+        updateMonthlyReportTemplateScale();
+      }
+    );
 
 
     window.addEventListener(
