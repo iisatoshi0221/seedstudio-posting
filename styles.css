@@ -1555,12 +1555,12 @@ button{-webkit-tap-highlight-color:transparent}
 /* Align 31 daily bars more closely with the printed day ticks. */
 .monthly-report-template__chart{
   left:112px;
-  top:798px;
+  top:817px;
   width:880px;
-  height:118px;
+  height:97px;
   grid-template-columns:repeat(31,minmax(0,1fr));
   column-gap:2px;
-  padding:4px 3px 0 4px;
+  padding:0 3px 0 4px;
 }
 
 .monthly-report-template__chart-bar{
@@ -1626,4 +1626,17 @@ button{-webkit-tap-highlight-color:transparent}
    Chart baseline correction.
    Bars must terminate on the printed Y=0 / X-axis baseline.
    Previous bottom padding kept the dynamic bars floating above 0.
+   ============================================================ */
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2G
+   Exact Y-axis calibration against the fixed background grid.
+   Template reference:
+   10,000 = y817
+    7,500 = y843
+    5,000 = y868
+    2,500 = y891
+        0 = y914
+   Dynamic bars now use y817..914 as the exact 0..10,000 plot area.
    ============================================================ */
