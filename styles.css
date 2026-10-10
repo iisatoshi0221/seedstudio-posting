@@ -1555,9 +1555,9 @@ button{-webkit-tap-highlight-color:transparent}
 /* Align 31 daily bars more closely with the printed day ticks. */
 .monthly-report-template__chart{
   left:112px;
-  top:790px;
+  top:798px;
   width:880px;
-  height:126px;
+  height:118px;
   grid-template-columns:repeat(31,minmax(0,1fr));
   column-gap:2px;
   padding:4px 3px 17px 4px;
@@ -1610,3 +1610,12 @@ button{-webkit-tap-highlight-color:transparent}
 .monthly-report-template__milestones{
   transform:translateY(1px);
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2E
+   Vertical chart correction before print phase.
+   The printed axes/day labels are part of the background image,
+   so only the dynamic bar plotting area is adjusted.
+   Bottom edge is preserved while the plot starts 8px lower.
+   ============================================================ */
