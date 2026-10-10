@@ -1765,21 +1765,30 @@ button{-webkit-tap-highlight-color:transparent}
    ============================================================ */
 
 .monthly-report-template__lifetime{
-  width:190px;
+  width:165px;
 }
 
 .monthly-report-template__lifetime--steps{
-  left:132px;
+  left:107px;
 }
 
 .monthly-report-template__lifetime--calories{
-  left:370px;
+  left:345px;
 }
 
 .monthly-report-template__lifetime--days{
-  left:617px;
+  left:592px;
 }
 
 .monthly-report-template__lifetime--quantity{
-  left:866px;
+  left:841px;
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3F-1B
+   Lifetime value alignment compromise.
+   Move the value blocks 25px left from the over-shifted position,
+   while narrowing the block so each original card right edge stays fixed.
+   This keeps future digit growth away from the icon without spilling right.
+   ============================================================ */
