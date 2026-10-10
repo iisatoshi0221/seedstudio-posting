@@ -3898,6 +3898,97 @@
 
 
     // ----------------------------------------------------------
+    // Daily steps chart
+    // The template already contains axes / grid / day labels.
+    // Overlay only the bars.
+    // Scale is fixed at 10,000 steps to match the template axis.
+    // Values above 10,000 are capped visually at the top.
+    // ----------------------------------------------------------
+
+    const chartContainer =
+      $("#monthlyReportChart");
+
+    if (chartContainer) {
+      const dailyByDay =
+        new Map(
+          (
+            Array.isArray(
+              stats.daily
+            )
+              ? stats.daily
+              : []
+          ).map(
+            (item) => [
+              Number(
+                String(
+                  item.date || ""
+                ).slice(
+                  8,
+                  10
+                )
+              ),
+              Number(
+                item.steps ||
+                0
+              )
+            ]
+          )
+        );
+
+      const bars =
+        [];
+
+      for (
+        let day = 1;
+        day <= 31;
+        day += 1
+      ) {
+        const steps =
+          Math.max(
+            0,
+            dailyByDay.get(
+              day
+            ) || 0
+          );
+
+        const ratio =
+          Math.min(
+            1,
+            steps / 10000
+          );
+
+        const isBest =
+          steps > 0 &&
+          steps ===
+            stats.monthly
+              .bestDailySteps;
+
+        bars.push(
+          `
+            <div class="monthly-report-template__chart-slot">
+              <div
+                class="monthly-report-template__chart-bar${isBest ? " is-best" : ""}"
+                style="height:${Math.max(
+                  steps > 0
+                    ? 5
+                    : 0,
+                  ratio * 100
+                )}%"
+                title="${day}日：${formatNumber(
+                  steps
+                )}歩"
+              ></div>
+            </div>
+          `
+        );
+      }
+
+      chartContainer.innerHTML =
+        bars.join("");
+    }
+
+
+    // ----------------------------------------------------------
     // Milestones
     // Background contains the line, circles, values and labels.
     // Overlay only achieved / next states.
