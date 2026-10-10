@@ -1560,7 +1560,7 @@ button{-webkit-tap-highlight-color:transparent}
   height:118px;
   grid-template-columns:repeat(31,minmax(0,1fr));
   column-gap:2px;
-  padding:4px 3px 17px 4px;
+  padding:4px 3px 0 4px;
 }
 
 .monthly-report-template__chart-bar{
@@ -1618,4 +1618,12 @@ button{-webkit-tap-highlight-color:transparent}
    The printed axes/day labels are part of the background image,
    so only the dynamic bar plotting area is adjusted.
    Bottom edge is preserved while the plot starts 8px lower.
+   ============================================================ */
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2F
+   Chart baseline correction.
+   Bars must terminate on the printed Y=0 / X-axis baseline.
+   Previous bottom padding kept the dynamic bars floating above 0.
    ============================================================ */
