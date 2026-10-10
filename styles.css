@@ -1545,3 +1545,68 @@ button{-webkit-tap-highlight-color:transparent}
   font-size:20px;
   line-height:1.12;
 }
+
+
+/* ============================================================
+   Monthly report - Phase MR-3E-2D
+   Final chart and micro-layout polish.
+   ============================================================ */
+
+/* Align 31 daily bars more closely with the printed day ticks. */
+.monthly-report-template__chart{
+  left:112px;
+  top:790px;
+  width:880px;
+  height:126px;
+  grid-template-columns:repeat(31,minmax(0,1fr));
+  column-gap:2px;
+  padding:4px 3px 17px 4px;
+}
+
+.monthly-report-template__chart-bar{
+  width:64%;
+  min-width:3px;
+}
+
+/* Keep the best day easy to spot without overpowering the chart. */
+.monthly-report-template__chart-bar.is-best{
+  width:72%;
+}
+
+/* Nudge highlight values into the optical center of each template card. */
+.monthly-report-template__highlight-value{
+  top:31px;
+  height:44px;
+  padding-top:0;
+  padding-bottom:0;
+}
+
+.monthly-report-template__highlight-value--best{
+  padding-left:76px;
+  padding-right:12px;
+  font-size:23px;
+}
+
+.monthly-report-template__highlight-value--previous{
+  padding-left:66px;
+  padding-right:12px;
+  font-size:24px;
+}
+
+.monthly-report-template__highlight-value--achievement{
+  top:24px;
+  height:52px;
+  padding-left:72px;
+  padding-right:10px;
+  font-size:18px;
+  line-height:1.18;
+}
+
+/* Tiny optical correction for lower values / milestone states. */
+.monthly-report-template__lifetime{
+  transform:translateY(2px);
+}
+
+.monthly-report-template__milestones{
+  transform:translateY(1px);
+}
