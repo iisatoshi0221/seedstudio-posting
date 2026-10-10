@@ -1640,3 +1640,118 @@ button{-webkit-tap-highlight-color:transparent}
         0 = y914
    Dynamic bars now use y817..914 as the exact 0..10,000 plot area.
    ============================================================ */
+
+
+/* ============================================================
+   Monthly report - Phase MR-3F
+   A4 print optimization + print controls
+   ============================================================ */
+
+.monthly-report-print-actions{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:18px 0 4px;
+}
+
+.monthly-report-print-actions .button{
+  flex:none;
+  width:auto;
+  min-width:150px;
+  margin:0;
+}
+
+.monthly-report-print-actions small{
+  color:#6E746F;
+  font-size:12px;
+  line-height:1.5;
+}
+
+@page{
+  size:A4 portrait;
+  margin:0;
+}
+
+@media print{
+
+  html,
+  body{
+    width:210mm!important;
+    height:297mm!important;
+    margin:0!important;
+    padding:0!important;
+    background:#fff!important;
+    overflow:hidden!important;
+  }
+
+  body.is-printing-monthly-report{
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+
+  body.is-printing-monthly-report .app-header,
+  body.is-printing-monthly-report [data-view]:not([data-view="monthly-report"]){
+    display:none!important;
+  }
+
+  body.is-printing-monthly-report #app,
+  body.is-printing-monthly-report .page,
+  body.is-printing-monthly-report [data-view="monthly-report"],
+  body.is-printing-monthly-report [data-view="monthly-report"] > .section{
+    display:block!important;
+    width:210mm!important;
+    max-width:none!important;
+    height:297mm!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#fff!important;
+    box-shadow:none!important;
+  }
+
+  body.is-printing-monthly-report
+  [data-view="monthly-report"] > .section > *:not(#monthlyReportSheetWrapper){
+    display:none!important;
+  }
+
+  body.is-printing-monthly-report #monthlyReportSheetWrapper{
+    display:block!important;
+    position:relative!important;
+    width:210mm!important;
+    height:297mm!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#fff!important;
+  }
+
+  body.is-printing-monthly-report #monthlyReportSheet{
+    width:1055px!important;
+    max-width:none!important;
+    height:1491px!important;
+    margin:0!important;
+    transform:scale(0.7523230212)!important;
+    transform-origin:top left!important;
+    box-shadow:none!important;
+    page-break-before:avoid!important;
+    page-break-after:avoid!important;
+    page-break-inside:avoid!important;
+    break-before:avoid-page!important;
+    break-after:avoid-page!important;
+    break-inside:avoid-page!important;
+  }
+
+  body.is-printing-monthly-report #monthlyReportSheet,
+  body.is-printing-monthly-report #monthlyReportSheet *{
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+
+  body.is-printing-monthly-report
+  .monthly-report-template__background{
+    display:block!important;
+  }
+}
