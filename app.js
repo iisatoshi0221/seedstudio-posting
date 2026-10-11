@@ -119,7 +119,10 @@
     editMapPoints: [],
     editMap: null,
     editPolygon: null,
-    editMarkers: []
+    editMarkers: [],
+
+    historyLogLoadToken: 0,
+    deleteDraft: null
   };
 
   const milestoneSteps = [
@@ -738,6 +741,63 @@
             expectedVersion,
             changes,
             reason
+          );
+
+      this.upsertCache(
+        saved
+      );
+
+      this.saveLocal(
+        this.cache
+      );
+
+      this.mode =
+        this.loadPending().length
+          ? "pending"
+          : "firestore";
+
+      return saved;
+    },
+
+    async softDelete(
+      postingId,
+      expectedVersion,
+      reason,
+      comment = ""
+    ) {
+      if (!state.authState.authorized) {
+        throw new Error(
+          "LOGIN_REQUIRED"
+        );
+      }
+
+      if (
+        state.authState
+          ?.staff
+          ?.role !==
+        "admin"
+      ) {
+        throw new Error(
+          "POSTING_ADMIN_REQUIRED"
+        );
+      }
+
+      if (
+        !navigator.onLine ||
+        !window.SeedStudioFirestore
+      ) {
+        throw new Error(
+          "POSTING_DELETE_ONLINE_REQUIRED"
+        );
+      }
+
+      const saved =
+        await window.SeedStudioFirestore
+          .softDeletePostingRecord(
+            postingId,
+            expectedVersion,
+            reason,
+            comment
           );
 
       this.upsertCache(
@@ -1816,7 +1876,10 @@
         "配布実績の詳細",
 
       "history-edit":
-        "配布実績を修正"
+        "配布実績を修正",
+
+      "history-delete":
+        "配布実績を削除"
     };
 
     if ($("#pageTitle")) {
@@ -1901,6 +1964,13 @@
       );
     }
 
+    if (
+      view ===
+      "history-delete"
+    ) {
+      renderHistoryDelete();
+    }
+
     if (view === "map") {
       window.setTimeout(
         renderMapStatus,
@@ -1944,6 +2014,9 @@
         "history",
 
       "history-edit":
+        "history-detail",
+
+      "history-delete":
         "history-detail"
     };
 
@@ -3600,6 +3673,703 @@
         "is-hidden",
         !state.authState.authorized
       );
+    }
+
+    const deleteButton =
+      $("#historyDetailDeleteButton");
+
+    const isAdmin =
+      state.authState
+        ?.staff
+        ?.role ===
+      "admin";
+
+    if (deleteButton) {
+      deleteButton.disabled =
+        !isAdmin;
+
+      deleteButton.classList.toggle(
+        "is-hidden",
+        !isAdmin
+      );
+    }
+
+    renderHistoryChangeLogs(
+      record.id
+    );
+  }
+
+
+  function historyChangeFieldLabel(
+    key
+  ) {
+    const labels = {
+      postingDate:
+        "配布日",
+
+      staffId:
+        "担当職員",
+
+      flyerId:
+        "チラシ",
+
+      quantity:
+        "配布部数",
+
+      participants:
+        "参加者・歩数",
+
+      area:
+        "配布範囲"
+    };
+
+    return labels[key] || key;
+  }
+
+
+  function historyChangeValue(
+    key,
+    value
+  ) {
+    if (key === "staffId") {
+      return names.staff(
+        value
+      );
+    }
+
+    if (key === "flyerId") {
+      return names.flyer(
+        value
+      );
+    }
+
+    if (key === "quantity") {
+      return `${formatNumber(
+        value
+      )}部`;
+    }
+
+    if (key === "participants") {
+      return (
+        Array.isArray(value)
+          ? value
+              .map(
+                (participant) =>
+                  `${names.participant(
+                    participant
+                      .participantId
+                  )} ${formatNumber(
+                    participant
+                      .steps
+                  )}歩`
+              )
+              .join("・")
+          : "—"
+      );
+    }
+
+    if (key === "area") {
+      const count =
+        value?.coordinates
+          ?.length ||
+        0;
+
+      return count
+        ? `${count}点の範囲`
+        : "範囲なし";
+    }
+
+    return String(
+      value ??
+      "—"
+    );
+  }
+
+
+  function historyLogChanges(
+    log
+  ) {
+    const before =
+      log?.before ||
+      {};
+
+    const after =
+      log?.after ||
+      {};
+
+    const keys = [
+      "postingDate",
+      "staffId",
+      "flyerId",
+      "quantity",
+      "participants",
+      "area"
+    ];
+
+    return keys
+      .filter(
+        (key) =>
+          JSON.stringify(
+            before[key]
+          ) !==
+          JSON.stringify(
+            after[key]
+          )
+      )
+      .map(
+        (key) => ({
+          key,
+
+          label:
+            historyChangeFieldLabel(
+              key
+            ),
+
+          before:
+            historyChangeValue(
+              key,
+              before[key]
+            ),
+
+          after:
+            historyChangeValue(
+              key,
+              after[key]
+            )
+        })
+      );
+  }
+
+
+  async function renderHistoryChangeLogs(
+    postingId
+  ) {
+    const list =
+      $("#historyChangeLogList");
+
+    const loading =
+      $("#historyChangeLogLoading");
+
+    const empty =
+      $("#historyChangeLogEmpty");
+
+    const error =
+      $("#historyChangeLogError");
+
+    if (
+      !list ||
+      !postingId
+    ) {
+      return;
+    }
+
+    const token =
+      ++state
+        .historyLogLoadToken;
+
+    list.innerHTML = "";
+
+    loading?.classList.remove(
+      "is-hidden"
+    );
+
+    empty?.classList.add(
+      "is-hidden"
+    );
+
+    error?.classList.add(
+      "is-hidden"
+    );
+
+    try {
+      const logs =
+        await window
+          .SeedStudioFirestore
+          .listPostingRecordChangeLogs(
+            postingId
+          );
+
+      if (
+        token !==
+        state.historyLogLoadToken ||
+        state.selectedHistoryRecordId !==
+          postingId
+      ) {
+        return;
+      }
+
+      loading?.classList.add(
+        "is-hidden"
+      );
+
+      if (!logs.length) {
+        empty?.classList.remove(
+          "is-hidden"
+        );
+
+        return;
+      }
+
+      list.innerHTML =
+        logs
+          .map(
+            (log) => {
+              const changes =
+                historyLogChanges(
+                  log
+                );
+
+              const actionLabel =
+                log.action ===
+                "delete"
+                  ? "削除"
+                  : "修正";
+
+              const actor =
+                log.actorEmail ||
+                log.actorUid ||
+                "—";
+
+              const reason =
+                String(
+                  log.reason ||
+                  ""
+                ).trim();
+
+              return `
+                <article class="posting-change-log">
+                  <div class="posting-change-log__header">
+                    <span
+                      class="posting-change-log__action ${
+                        log.action ===
+                        "delete"
+                          ? "is-delete"
+                          : ""
+                      }"
+                    >
+                      ${escapeHtml(
+                        actionLabel
+                      )}
+                    </span>
+
+                    <b>
+                      v${formatNumber(
+                        log.versionBefore
+                      )}
+                      →
+                      v${formatNumber(
+                        log.versionAfter
+                      )}
+                    </b>
+                  </div>
+
+                  <small class="posting-change-log__meta">
+                    ${escapeHtml(
+                      formatRecordTimestamp(
+                        log.changedAt
+                      )
+                    )}
+                    <br>
+                    ${escapeHtml(
+                      actor
+                    )}
+                  </small>
+
+                  ${
+                    changes.length
+                      ? `
+                        <div class="posting-change-log__changes">
+                          ${
+                            changes
+                              .map(
+                                (change) => `
+                                  <div>
+                                    <strong>
+                                      ${escapeHtml(
+                                        change.label
+                                      )}
+                                    </strong>
+
+                                    <span>
+                                      ${escapeHtml(
+                                        change.before
+                                      )}
+                                      →
+                                      ${escapeHtml(
+                                        change.after
+                                      )}
+                                    </span>
+                                  </div>
+                                `
+                              )
+                              .join("")
+                          }
+                        </div>
+                      `
+                      : ""
+                  }
+
+                  ${
+                    reason
+                      ? `
+                        <p class="posting-change-log__reason">
+                          理由：
+                          ${escapeHtml(
+                            reason
+                          )}
+                        </p>
+                      `
+                      : ""
+                  }
+                </article>
+              `;
+            }
+          )
+          .join("");
+
+    } catch (loadError) {
+      console.error(
+        "Posting change log load failed.",
+        loadError
+      );
+
+      if (
+        token !==
+        state.historyLogLoadToken
+      ) {
+        return;
+      }
+
+      loading?.classList.add(
+        "is-hidden"
+      );
+
+      error?.classList.remove(
+        "is-hidden"
+      );
+    }
+  }
+
+
+  function beginHistoryDelete() {
+    const record =
+      selectedHistoryRecord();
+
+    if (!record) {
+      alert(
+        "削除する配布実績を読み込めません。"
+      );
+
+      return;
+    }
+
+    if (
+      state.authState
+        ?.staff
+        ?.role !==
+      "admin"
+    ) {
+      alert(
+        "配布実績の削除は管理者のみ実行できます。"
+      );
+
+      return;
+    }
+
+    if (!navigator.onLine) {
+      alert(
+        "配布実績の削除はオンライン時のみ利用できます。"
+      );
+
+      return;
+    }
+
+    const model =
+      window
+        .SeedStudioPostingRecordModel;
+
+    state.deleteDraft = {
+      postingId:
+        record.id,
+
+      expectedVersion:
+        model
+          ?.getVersion(
+            record
+          ) ||
+        1
+    };
+
+    navigate(
+      "history-delete"
+    );
+  }
+
+
+  function renderHistoryDelete() {
+    const record =
+      selectedHistoryRecord();
+
+    if (
+      !record ||
+      !state.deleteDraft ||
+      state.deleteDraft
+        .postingId !==
+        record.id ||
+      state.authState
+        ?.staff
+        ?.role !==
+        "admin"
+    ) {
+      navigate(
+        "history-detail"
+      );
+
+      return;
+    }
+
+    if (
+      $("#historyDeleteSummary")
+    ) {
+      $(
+        "#historyDeleteSummary"
+      ).innerHTML =
+        `
+          <div class="confirm-row">
+            <span>配布日</span>
+            <b>
+              ${escapeHtml(
+                record.postingDate
+              )}
+            </b>
+          </div>
+
+          <div class="confirm-row">
+            <span>配布部数</span>
+            <b>
+              ${formatNumber(
+                record.quantity
+              )}部
+            </b>
+          </div>
+
+          <div class="confirm-row">
+            <span>担当職員</span>
+            <b>
+              ${escapeHtml(
+                names.staff(
+                  record.staffId
+                )
+              )}
+            </b>
+          </div>
+
+          <div class="confirm-row">
+            <span>データ版</span>
+            <b>
+              v${state.deleteDraft
+                .expectedVersion}
+            </b>
+          </div>
+        `;
+    }
+
+    if (
+      $("#historyDeleteReason")
+    ) {
+      $("#historyDeleteReason")
+        .value =
+          "";
+    }
+
+    if (
+      $("#historyDeleteComment")
+    ) {
+      $("#historyDeleteComment")
+        .value =
+          "";
+    }
+  }
+
+
+  async function saveHistoryDelete() {
+    const button =
+      $("#historyDeleteConfirmButton");
+
+    const record =
+      selectedHistoryRecord();
+
+    if (
+      !button ||
+      button.disabled ||
+      !record ||
+      !state.deleteDraft
+    ) {
+      return;
+    }
+
+    if (
+      state.authState
+        ?.staff
+        ?.role !==
+      "admin"
+    ) {
+      alert(
+        "配布実績の削除は管理者のみ実行できます。"
+      );
+
+      return;
+    }
+
+    const reason =
+      (
+        $("#historyDeleteReason")
+          ?.value ||
+        ""
+      ).trim();
+
+    const comment =
+      (
+        $("#historyDeleteComment")
+          ?.value ||
+        ""
+      ).trim();
+
+    if (!reason) {
+      alert(
+        "削除理由を選択してください。"
+      );
+
+      return;
+    }
+
+    if (
+      reason === "その他" &&
+      !comment
+    ) {
+      alert(
+        "「その他」を選択した場合は、補足を入力してください。"
+      );
+
+      return;
+    }
+
+    if (!navigator.onLine) {
+      alert(
+        "配布実績の削除はオンライン時のみ利用できます。"
+      );
+
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `${record.postingDate}・${formatNumber(
+          record.quantity
+        )}部の実績を削除します。\n\n削除後は通常の履歴・集計・成果・月間レポートから除外されます。\n\n実行してよろしいですか？`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent =
+      "削除しています…";
+
+    try {
+      await dataRepository
+        .softDelete(
+          state.deleteDraft
+            .postingId,
+          state.deleteDraft
+            .expectedVersion,
+          reason,
+          comment
+        );
+
+      state.deleteDraft =
+        null;
+
+      state.selectedHistoryRecordId =
+        null;
+
+      renderHome();
+      renderHistory();
+      renderAchievements();
+
+      alert(
+        "配布実績を削除しました。変更履歴は監査用に保持されています。"
+      );
+
+      navigate(
+        "history"
+      );
+
+    } catch (deleteError) {
+      console.error(
+        "Posting delete failed.",
+        deleteError
+      );
+
+      if (
+        deleteError?.code ===
+          "POSTING_VERSION_CONFLICT" ||
+        deleteError?.message ===
+          "POSTING_VERSION_CONFLICT"
+      ) {
+        alert(
+          "この配布実績は別の画面で更新されています。削除せず、最新データを読み込み直します。"
+        );
+
+        try {
+          await dataRepository
+            .reloadFromFirestore();
+
+          state.deleteDraft =
+            null;
+
+          navigate(
+            "history-detail"
+          );
+
+        } catch (
+          reloadError
+        ) {
+          console.error(
+            "Posting reload after delete conflict failed.",
+            reloadError
+          );
+        }
+
+      } else if (
+        deleteError?.message ===
+        "POSTING_DELETE_ONLINE_REQUIRED"
+      ) {
+        alert(
+          "配布実績の削除はオンライン時のみ利用できます。"
+        );
+
+      } else if (
+        deleteError?.message ===
+          "POSTING_ADMIN_REQUIRED" ||
+        deleteError?.code ===
+          "permission-denied"
+      ) {
+        alert(
+          "配布実績の削除は管理者のみ実行できます。"
+        );
+
+      } else {
+        alert(
+          "配布実績を削除できませんでした。通信状態を確認して、もう一度お試しください。"
+        );
+      }
+
+    } finally {
+      button.disabled = false;
+      button.textContent =
+        "この実績を削除する";
     }
   }
 
@@ -6405,6 +7175,18 @@
       ?.addEventListener(
         "click",
         beginHistoryEdit
+      );
+
+    $("#historyDetailDeleteButton")
+      ?.addEventListener(
+        "click",
+        beginHistoryDelete
+      );
+
+    $("#historyDeleteConfirmButton")
+      ?.addEventListener(
+        "click",
+        saveHistoryDelete
       );
 
     $("#historyEditParticipants")
