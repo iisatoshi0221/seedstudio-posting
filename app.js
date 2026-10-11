@@ -113,7 +113,13 @@
 
     selectedHistoryRecordId: null,
     historyDetailMap: null,
-    historyDetailPolygon: null
+    historyDetailPolygon: null,
+
+    editDraft: null,
+    editMapPoints: [],
+    editMap: null,
+    editPolygon: null,
+    editMarkers: []
   };
 
   const milestoneSteps = [
@@ -702,6 +708,52 @@
           record
         };
       }
+    },
+
+    async update(
+      postingId,
+      expectedVersion,
+      changes,
+      reason = ""
+    ) {
+      if (!state.authState.authorized) {
+        throw new Error(
+          "LOGIN_REQUIRED"
+        );
+      }
+
+      if (
+        !navigator.onLine ||
+        !window.SeedStudioFirestore
+      ) {
+        throw new Error(
+          "POSTING_EDIT_ONLINE_REQUIRED"
+        );
+      }
+
+      const saved =
+        await window.SeedStudioFirestore
+          .updatePostingRecord(
+            postingId,
+            expectedVersion,
+            changes,
+            reason
+          );
+
+      this.upsertCache(
+        saved
+      );
+
+      this.saveLocal(
+        this.cache
+      );
+
+      this.mode =
+        this.loadPending().length
+          ? "pending"
+          : "firestore";
+
+      return saved;
     }
   };
 
@@ -1761,7 +1813,10 @@
         "配布履歴",
 
       "history-detail":
-        "配布実績の詳細"
+        "配布実績の詳細",
+
+      "history-edit":
+        "配布実績を修正"
     };
 
     if ($("#pageTitle")) {
@@ -1834,6 +1889,18 @@
       );
     }
 
+    if (
+      view ===
+      "history-edit"
+    ) {
+      renderHistoryEdit();
+
+      window.setTimeout(
+        initHistoryEditMap,
+        0
+      );
+    }
+
     if (view === "map") {
       window.setTimeout(
         renderMapStatus,
@@ -1874,7 +1941,10 @@
         "home",
 
       "history-detail":
-        "history"
+        "history",
+
+      "history-edit":
+        "history-detail"
     };
 
     navigate(
@@ -3517,6 +3587,1053 @@
           formatRecordTimestamp(
             record.createdAt
           );
+    }
+
+    const editButton =
+      $("#historyDetailEditButton");
+
+    if (editButton) {
+      editButton.disabled =
+        !state.authState.authorized;
+
+      editButton.classList.toggle(
+        "is-hidden",
+        !state.authState.authorized
+      );
+    }
+  }
+
+
+  function historyEditParticipantChoices(
+    record
+  ) {
+    const combined =
+      new Map();
+
+    state.postingParticipants
+      .forEach(
+        (person) => {
+          combined.set(
+            person.personId,
+            {
+              personId:
+                person.personId,
+
+              name:
+                person.name,
+
+              current:
+                true
+            }
+          );
+        }
+      );
+
+    (
+      record?.participants ||
+      []
+    ).forEach(
+      (participant) => {
+        const id =
+          participant
+            .participantId;
+
+        if (
+          !combined.has(id)
+        ) {
+          combined.set(
+            id,
+            {
+              personId:
+                id,
+
+              name:
+                names.participant(
+                  id
+                ),
+
+              current:
+                false
+            }
+          );
+        }
+      }
+    );
+
+    return [...combined.values()]
+      .sort(
+        (a, b) =>
+          String(
+            a.name || ""
+          ).localeCompare(
+            String(
+              b.name || ""
+            ),
+            "ja"
+          )
+      );
+  }
+
+
+  function beginHistoryEdit() {
+    const record =
+      selectedHistoryRecord();
+
+    if (!record) {
+      alert(
+        "修正する配布実績を読み込めません。"
+      );
+
+      return;
+    }
+
+    if (!navigator.onLine) {
+      alert(
+        "配布実績の修正はオンライン時のみ利用できます。"
+      );
+
+      return;
+    }
+
+    const model =
+      window
+        .SeedStudioPostingRecordModel;
+
+    state.editDraft = {
+      postingId:
+        record.id,
+
+      expectedVersion:
+        model
+          ?.getVersion(
+            record
+          ) ||
+        1,
+
+      original: {
+        postingDate:
+          record.postingDate,
+
+        staffId:
+          record.staffId,
+
+        flyerId:
+          record.flyerId,
+
+        quantity:
+          Number(
+            record.quantity ||
+            0
+          ),
+
+        participants:
+          (
+            record.participants ||
+            []
+          ).map(
+            (participant) => ({
+              participantId:
+                participant
+                  .participantId,
+
+              steps:
+                Number(
+                  participant.steps ||
+                  0
+                )
+            })
+          ),
+
+        area:
+          record.area?.type ===
+            "Polygon"
+            ? {
+                type:
+                  "Polygon",
+
+                coordinates:
+                  (
+                    record.area
+                      .coordinates ||
+                    []
+                  ).map(
+                    (
+                      coordinate
+                    ) => [
+                      Number(
+                        coordinate[0]
+                      ),
+
+                      Number(
+                        coordinate[1]
+                      )
+                    ]
+                  )
+              }
+            : null
+      },
+
+      postingDate:
+        record.postingDate,
+
+      staffId:
+        record.staffId,
+
+      flyerId:
+        record.flyerId,
+
+      quantity:
+        Number(
+          record.quantity ||
+          0
+        ),
+
+      participantIds:
+        (
+          record.participants ||
+          []
+        ).map(
+          (participant) =>
+            participant
+              .participantId
+        ),
+
+      participantSteps:
+        Object.fromEntries(
+          (
+            record.participants ||
+            []
+          ).map(
+            (participant) => [
+              participant
+                .participantId,
+
+              Number(
+                participant.steps ||
+                0
+              )
+            ]
+          )
+        ),
+
+      reason:
+        ""
+    };
+
+    state.editMapPoints =
+      state.editDraft
+        .original
+        .area
+        ?.coordinates
+        ?.map(
+          (
+            coordinate
+          ) => [
+            coordinate[0],
+            coordinate[1]
+          ]
+        ) ||
+      [];
+
+    navigate(
+      "history-edit"
+    );
+  }
+
+
+  function historyEditSelectOptions(
+    items,
+    currentId,
+    labelResolver
+  ) {
+    const active =
+      items.filter(
+        (item) =>
+          item.active
+      );
+
+    const hasCurrent =
+      active.some(
+        (item) =>
+          item.id ===
+          currentId
+      );
+
+    const values =
+      hasCurrent ||
+      !currentId
+        ? active
+        : [
+            {
+              id:
+                currentId,
+
+              name:
+                labelResolver(
+                  currentId
+                ),
+
+              active:
+                false
+            },
+            ...active
+          ];
+
+    return values
+      .map(
+        (item) => `
+          <option
+            value="${escapeHtml(
+              item.id
+            )}"
+            ${
+              item.id ===
+              currentId
+                ? "selected"
+                : ""
+            }
+          >
+            ${escapeHtml(
+              item.name
+            )}${
+              item.active
+                ? ""
+                : "（過去）"
+            }
+          </option>
+        `
+      )
+      .join("");
+  }
+
+
+  function renderHistoryEditParticipants() {
+    const list =
+      $(
+        "#historyEditParticipants"
+      );
+
+    const record =
+      selectedHistoryRecord();
+
+    if (
+      !list ||
+      !record ||
+      !state.editDraft
+    ) {
+      return;
+    }
+
+    const selected =
+      new Set(
+        state.editDraft
+          .participantIds ||
+        []
+      );
+
+    list.innerHTML =
+      historyEditParticipantChoices(
+        record
+      )
+        .map(
+          (person) => {
+            const isSelected =
+              selected.has(
+                person.personId
+              );
+
+            return `
+              <div
+                class="posting-edit-participant ${
+                  isSelected
+                    ? "is-selected"
+                    : ""
+                }"
+              >
+                <label class="posting-edit-participant__person">
+                  <input
+                    class="js-history-edit-participant"
+                    type="checkbox"
+                    value="${escapeHtml(
+                      person.personId
+                    )}"
+                    ${
+                      isSelected
+                        ? "checked"
+                        : ""
+                    }
+                  >
+
+                  <span>
+                    ${escapeHtml(
+                      person.name
+                    )}
+
+                    ${
+                      person.current
+                        ? ""
+                        : '<small>過去の参加者</small>'
+                    }
+                  </span>
+                </label>
+
+                <div
+                  class="number-input posting-edit-participant__steps ${
+                    isSelected
+                      ? ""
+                      : "is-hidden"
+                  }"
+                >
+                  <input
+                    class="input js-history-edit-step"
+                    type="number"
+                    min="1"
+                    inputmode="numeric"
+                    data-id="${escapeHtml(
+                      person.personId
+                    )}"
+                    value="${
+                      isSelected
+                        ? escapeHtml(
+                            state.editDraft
+                              .participantSteps[
+                                person
+                                  .personId
+                              ] ||
+                            ""
+                          )
+                        : ""
+                    }"
+                    ${
+                      isSelected
+                        ? ""
+                        : "disabled"
+                    }
+                  >
+
+                  <span>
+                    歩
+                  </span>
+                </div>
+              </div>
+            `;
+          }
+        )
+        .join("");
+  }
+
+
+  function renderHistoryEdit() {
+    const record =
+      selectedHistoryRecord();
+
+    if (
+      !record ||
+      !state.editDraft ||
+      state.editDraft
+        .postingId !==
+        record.id
+    ) {
+      navigate(
+        "history-detail"
+      );
+
+      return;
+    }
+
+    if (
+      $("#historyEditPostingDate")
+    ) {
+      $("#historyEditPostingDate")
+        .value =
+          state.editDraft
+            .postingDate ||
+          "";
+    }
+
+    if (
+      $("#historyEditStaff")
+    ) {
+      $("#historyEditStaff")
+        .innerHTML =
+          historyEditSelectOptions(
+            master.staff,
+            state.editDraft
+              .staffId,
+            names.staff
+          );
+    }
+
+    if (
+      $("#historyEditFlyer")
+    ) {
+      $("#historyEditFlyer")
+        .innerHTML =
+          historyEditSelectOptions(
+            master.flyers,
+            state.editDraft
+              .flyerId,
+            names.flyer
+          );
+    }
+
+    if (
+      $("#historyEditQuantity")
+    ) {
+      $("#historyEditQuantity")
+        .value =
+          state.editDraft
+            .quantity ||
+          "";
+    }
+
+    if (
+      $("#historyEditReason")
+    ) {
+      $("#historyEditReason")
+        .value =
+          state.editDraft
+            .reason ||
+          "";
+    }
+
+    if (
+      $("#historyEditVersion")
+    ) {
+      $("#historyEditVersion")
+        .textContent =
+          `v${
+            state.editDraft
+              .expectedVersion
+          } を編集中`;
+    }
+
+    renderHistoryEditParticipants();
+  }
+
+
+  function syncHistoryEditDraft() {
+    if (!state.editDraft) {
+      return;
+    }
+
+    state.editDraft.postingDate =
+      $("#historyEditPostingDate")
+        ?.value ||
+      "";
+
+    state.editDraft.staffId =
+      $("#historyEditStaff")
+        ?.value ||
+      "";
+
+    state.editDraft.flyerId =
+      $("#historyEditFlyer")
+        ?.value ||
+      "";
+
+    state.editDraft.quantity =
+      Number(
+        $("#historyEditQuantity")
+          ?.value ||
+        0
+      );
+
+    state.editDraft.reason =
+      $("#historyEditReason")
+        ?.value ||
+      "";
+  }
+
+
+  function drawHistoryEditPolygon() {
+    if (
+      !state.editMap ||
+      !window.google?.maps
+    ) {
+      return;
+    }
+
+    state.editMarkers.forEach(
+      (marker) =>
+        marker.setMap(null)
+    );
+
+    state.editMarkers = [];
+
+    if (state.editPolygon) {
+      state.editPolygon.setMap(
+        null
+      );
+
+      state.editPolygon = null;
+    }
+
+    const path =
+      toLatLngPath(
+        state.editMapPoints
+      );
+
+    if (path.length >= 2) {
+      state.editPolygon =
+        new google.maps.Polygon({
+          paths:
+            path,
+
+          strokeColor:
+            "#2F6D4F",
+
+          strokeOpacity:
+            1,
+
+          strokeWeight:
+            3,
+
+          fillColor:
+            "#2F6D4F",
+
+          fillOpacity:
+            path.length >= 3
+              ? 0.22
+              : 0.08,
+
+          map:
+            state.editMap,
+
+          clickable:
+            false
+        });
+    }
+
+    path.forEach(
+      (
+        position,
+        index
+      ) => {
+        const marker =
+          new google.maps.Marker({
+            position,
+
+            map:
+              state.editMap,
+
+            label: {
+              text:
+                String(
+                  index + 1
+                ),
+
+              color:
+                "#ffffff",
+
+              fontWeight:
+                "700"
+            },
+
+            title:
+              `頂点 ${
+                index + 1
+              }`
+          });
+
+        state.editMarkers.push(
+          marker
+        );
+      }
+    );
+
+    const status =
+      $(
+        "#historyEditAreaStatus"
+      );
+
+    if (status) {
+      status.textContent =
+        state.editMapPoints
+          .length >= 3
+          ? `現在 ${
+              state.editMapPoints
+                .length
+            }点で範囲を指定中`
+          : "地図をタップして3点以上を指定してください";
+    }
+  }
+
+
+  async function initHistoryEditMap() {
+    if (!state.editDraft) {
+      return;
+    }
+
+    const statusId =
+      "#historyEditMapStatus";
+
+    try {
+      setMapStatus(
+        statusId,
+        "Google Mapsを読み込み中…"
+      );
+
+      await loadGoogleMaps();
+
+      if (!state.editMap) {
+        state.editMap =
+          new google.maps.Map(
+            $(
+              "#historyEditGoogleMap"
+            ),
+            {
+              center:
+                DEFAULT_CENTER,
+
+              zoom:
+                DEFAULT_ZOOM,
+
+              mapTypeControl:
+                false,
+
+              streetViewControl:
+                false,
+
+              fullscreenControl:
+                false,
+
+              clickableIcons:
+                false,
+
+              gestureHandling:
+                "greedy"
+            }
+          );
+
+        state.editMap.addListener(
+          "click",
+          (event) => {
+            state.editMapPoints.push([
+              event.latLng.lng(),
+              event.latLng.lat()
+            ]);
+
+            drawHistoryEditPolygon();
+          }
+        );
+      }
+
+      drawHistoryEditPolygon();
+
+      fitMapToCoordinates(
+        state.editMap,
+        state.editMapPoints
+      );
+
+      hideMapStatus(
+        statusId
+      );
+
+      window.setTimeout(
+        () =>
+          google.maps.event
+            .trigger(
+              state.editMap,
+              "resize"
+            ),
+        50
+      );
+    } catch (error) {
+      console.error(
+        "History edit map error.",
+        error
+      );
+
+      setMapStatus(
+        statusId,
+        "Google Mapsを表示できませんでした。",
+        true
+      );
+    }
+  }
+
+
+  function historyEditChanges() {
+    const draft =
+      state.editDraft;
+
+    if (!draft) {
+      return {};
+    }
+
+    const next = {
+      postingDate:
+        draft.postingDate,
+
+      staffId:
+        draft.staffId,
+
+      flyerId:
+        draft.flyerId,
+
+      quantity:
+        Number(
+          draft.quantity ||
+          0
+        ),
+
+      participants:
+        (
+          draft.participantIds ||
+          []
+        ).map(
+          (id) => ({
+            participantId:
+              id,
+
+            steps:
+              Number(
+                draft.participantSteps[
+                  id
+                ] ||
+              0
+            )
+          })
+        ),
+
+      area: {
+        type:
+          "Polygon",
+
+        coordinates:
+          state.editMapPoints
+            .map(
+              (
+                coordinate
+              ) => [
+                Number(
+                  coordinate[0]
+                ),
+
+                Number(
+                  coordinate[1]
+                )
+              ]
+            )
+      }
+    };
+
+    const changes = {};
+
+    Object.keys(next)
+      .forEach(
+        (key) => {
+          if (
+            JSON.stringify(
+              next[key]
+            ) !==
+            JSON.stringify(
+              draft.original[
+                key
+              ]
+            )
+          ) {
+            changes[key] =
+              next[key];
+          }
+        }
+      );
+
+    return changes;
+  }
+
+
+  async function saveHistoryEdit() {
+    const button =
+      $("#historyEditSaveButton");
+
+    if (
+      !button ||
+      button.disabled ||
+      !state.editDraft
+    ) {
+      return;
+    }
+
+    syncHistoryEditDraft();
+
+    const draft =
+      state.editDraft;
+
+    if (!navigator.onLine) {
+      alert(
+        "配布実績の修正はオンライン時のみ利用できます。"
+      );
+
+      return;
+    }
+
+    if (
+      !draft.postingDate ||
+      !draft.staffId ||
+      !draft.flyerId ||
+      draft.quantity <= 0
+    ) {
+      alert(
+        "配布日・担当職員・チラシ・配布部数を確認してください。"
+      );
+
+      return;
+    }
+
+    if (
+      !draft.participantIds
+        .length
+    ) {
+      alert(
+        "参加した人を1名以上選択してください。"
+      );
+
+      return;
+    }
+
+    const validSteps =
+      draft.participantIds
+        .every(
+          (id) =>
+            Number(
+              draft
+                .participantSteps[
+                  id
+                ] ||
+              0
+            ) > 0
+        );
+
+    if (!validSteps) {
+      alert(
+        "参加した人全員の歩数を入力してください。"
+      );
+
+      return;
+    }
+
+    if (
+      state.editMapPoints
+        .length < 3
+    ) {
+      alert(
+        "配布範囲は地図上で3点以上指定してください。"
+      );
+
+      return;
+    }
+
+    const changes =
+      historyEditChanges();
+
+    if (
+      !Object.keys(
+        changes
+      ).length
+    ) {
+      alert(
+        "変更された項目がありません。"
+      );
+
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent =
+      "保存しています…";
+
+    try {
+      const saved =
+        await dataRepository
+          .update(
+            draft.postingId,
+            draft.expectedVersion,
+            changes,
+            draft.reason
+          );
+
+      state.editDraft =
+        null;
+
+      state.editMapPoints =
+        [];
+
+      state.selectedHistoryRecordId =
+        saved.id;
+
+      renderHome();
+      renderHistory();
+      renderAchievements();
+
+      alert(
+        "配布実績を修正しました。"
+      );
+
+      navigate(
+        "history-detail"
+      );
+    } catch (error) {
+      console.error(
+        "Posting edit failed.",
+        error
+      );
+
+      if (
+        error?.code ===
+          "POSTING_VERSION_CONFLICT" ||
+        error?.message ===
+          "POSTING_VERSION_CONFLICT"
+      ) {
+        alert(
+          "この配布実績は別の画面で更新されています。最新データを読み込み直します。"
+        );
+
+        try {
+          await dataRepository
+            .reloadFromFirestore();
+
+          state.editDraft =
+            null;
+
+          navigate(
+            "history-detail"
+          );
+        } catch (
+          reloadError
+        ) {
+          console.error(
+            "Posting reload after conflict failed.",
+            reloadError
+          );
+        }
+
+      } else if (
+        error?.message ===
+        "POSTING_EDIT_ONLINE_REQUIRED"
+      ) {
+        alert(
+          "配布実績の修正はオンライン時のみ利用できます。"
+        );
+
+      } else if (
+        error?.code ===
+        "permission-denied"
+      ) {
+        alert(
+          "この配布実績を修正する権限がありません。"
+        );
+
+      } else {
+        alert(
+          "修正内容を保存できませんでした。通信状態を確認して、もう一度お試しください。"
+        );
+      }
+    } finally {
+      button.disabled = false;
+      button.textContent =
+        "変更を保存する";
     }
   }
 
@@ -5282,6 +6399,113 @@
             "history-detail"
           );
         }
+      );
+
+    $("#historyDetailEditButton")
+      ?.addEventListener(
+        "click",
+        beginHistoryEdit
+      );
+
+    $("#historyEditParticipants")
+      ?.addEventListener(
+        "change",
+        (event) => {
+          if (!state.editDraft) {
+            return;
+          }
+
+          if (
+            event.target.matches(
+              ".js-history-edit-participant"
+            )
+          ) {
+            const id =
+              event.target.value;
+
+            const selected =
+              new Set(
+                state.editDraft
+                  .participantIds ||
+                []
+              );
+
+            if (
+              event.target.checked
+            ) {
+              selected.add(id);
+
+              if (
+                !state.editDraft
+                  .participantSteps[
+                    id
+                  ]
+              ) {
+                state.editDraft
+                  .participantSteps[
+                    id
+                  ] = 0;
+              }
+            } else {
+              selected.delete(id);
+            }
+
+            state.editDraft
+              .participantIds =
+                [...selected];
+
+            renderHistoryEditParticipants();
+          }
+        }
+      );
+
+    $("#historyEditParticipants")
+      ?.addEventListener(
+        "input",
+        (event) => {
+          if (
+            !state.editDraft ||
+            !event.target.matches(
+              ".js-history-edit-step"
+            )
+          ) {
+            return;
+          }
+
+          state.editDraft
+            .participantSteps[
+              event.target
+                .dataset.id
+            ] =
+              Number(
+                event.target.value ||
+                0
+              );
+        }
+      );
+
+    $("#historyEditUndoAreaButton")
+      ?.addEventListener(
+        "click",
+        () => {
+          state.editMapPoints.pop();
+          drawHistoryEditPolygon();
+        }
+      );
+
+    $("#historyEditResetAreaButton")
+      ?.addEventListener(
+        "click",
+        () => {
+          state.editMapPoints = [];
+          drawHistoryEditPolygon();
+        }
+      );
+
+    $("#historyEditSaveButton")
+      ?.addEventListener(
+        "click",
+        saveHistoryEdit
       );
 
     $("#participantList")
