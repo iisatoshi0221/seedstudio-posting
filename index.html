@@ -66,7 +66,7 @@
   
   <link
     rel="stylesheet"
-    href="./styles.css?v=20261010-11"
+    href="./styles.css?v=20261011-1"
   >
 </head>
 
@@ -1848,6 +1848,134 @@
       </section>
 
 
+      <!-- ==================================================== -->
+      <!-- HISTORY DETAIL                                       -->
+      <!-- ==================================================== -->
+
+      <section
+        class="view"
+        data-view="history-detail"
+      >
+
+        <section class="section">
+
+          <div
+            id="historyDetailEmpty"
+            class="empty-state is-hidden"
+          >
+            📭
+            <br>
+            この配布実績を表示できません
+          </div>
+
+
+          <div
+            id="historyDetailContent"
+            class="is-hidden"
+          >
+
+            <section class="card history-detail-hero">
+
+              <small>
+                配布日
+              </small>
+
+              <strong
+                id="historyDetailDate"
+              >
+                —
+              </strong>
+
+              <div
+                id="historyDetailQuantity"
+                class="history-detail-hero__quantity"
+              >
+                0部
+              </div>
+
+            </section>
+
+
+            <section class="card history-detail-card">
+
+              <div class="history-detail-row">
+                <span>担当職員</span>
+                <b id="historyDetailStaff">—</b>
+              </div>
+
+              <div class="history-detail-row">
+                <span>チラシ</span>
+                <b id="historyDetailFlyer">—</b>
+              </div>
+
+            </section>
+
+
+            <section class="card history-detail-card">
+
+              <h3>
+                一緒に参加した人
+              </h3>
+
+              <div
+                id="historyDetailParticipants"
+                class="history-detail-participants"
+              ></div>
+
+            </section>
+
+
+            <section class="card history-detail-card">
+
+              <h3>
+                配布範囲
+              </h3>
+
+              <div class="history-detail-map">
+
+                <div
+                  id="historyDetailGoogleMap"
+                  class="google-map"
+                ></div>
+
+                <div
+                  id="historyDetailMapStatus"
+                  class="map-status"
+                >
+                  Google Mapsを読み込み中…
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <section class="card history-detail-card history-detail-meta">
+
+              <div class="history-detail-row">
+                <span>レコードID</span>
+                <b id="historyDetailRecordId">—</b>
+              </div>
+
+              <div class="history-detail-row">
+                <span>データ版</span>
+                <b id="historyDetailVersion">—</b>
+              </div>
+
+              <div class="history-detail-row">
+                <span>初回登録日時</span>
+                <b id="historyDetailCreatedAt">—</b>
+              </div>
+
+            </section>
+
+          </div>
+
+        </section>
+
+      </section>
+
+
     </main>
 
   </div>
@@ -1875,7 +2003,7 @@
   ></script>
 
   <script
-    src="./app.js?v=20261011-1"
+    src="./app.js?v=20261011-2"
     defer
   ></script>
 
