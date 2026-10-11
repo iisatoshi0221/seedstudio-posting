@@ -133,6 +133,18 @@
       : []
     ).forEach(
       (record) => {
+        const postingRecordModel =
+          root.SeedStudioPostingRecordModel;
+
+        const active =
+          postingRecordModel
+            ? postingRecordModel.isActive(record)
+            : record?.status !== "deleted";
+
+        if (!active) {
+          return;
+        }
+
         const postingDate =
           record?.postingDate;
 
