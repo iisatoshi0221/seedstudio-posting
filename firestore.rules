@@ -2981,7 +2981,14 @@ match /postingRecords/{postingId} {
       && log.after == postingSnapshot(next)
       && log.actorUid == request.auth.uid
       && log.operationId == next.operationId
-      && log.changedAt == request.time;
+      && log.changedAt == request.time
+      && (
+        action != 'delete'
+        || (
+          log.reason == next.deleteReason
+          && log.get('comment', '') == next.deleteComment
+        )
+      );
   }
 
   // SeedStudio active admin/support may read Posting records.
