@@ -11,6 +11,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  runTransaction,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
@@ -366,6 +367,211 @@ function decodePostingRecord(
   return {
     ...record,
     area
+  };
+}
+
+
+// ============================================================
+// Posting Records v2 helpers
+//
+// SP-Next-2C-2
+// Transaction + immutable changeLog foundation.
+//
+// IMPORTANT:
+// savePostingRecord() remains the production v0.1 create path.
+// These v2 APIs are introduced dormant until the matching
+// Firestore Rules are deployed.
+// ============================================================
+
+function postingRecordStatus(
+  record
+) {
+  return record?.status ===
+    "deleted"
+    ? "deleted"
+    : "active";
+}
+
+
+function postingRecordVersion(
+  record
+) {
+  const value =
+    Number(
+      record?.version
+    );
+
+  return Number.isInteger(
+      value
+    ) &&
+    value >= 1
+      ? value
+      : 1;
+}
+
+
+function postingOperationId() {
+  const random =
+    globalThis.crypto
+      ?.randomUUID
+      ?.();
+
+  return random
+    ? `posting-${random}`
+    : `posting-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 12)}`;
+}
+
+
+function postingAuditSnapshot(
+  record
+) {
+  return {
+    postingDate:
+      record?.postingDate ||
+      "",
+
+    staffId:
+      record?.staffId ||
+      "",
+
+    flyerId:
+      record?.flyerId ||
+      "",
+
+    quantity:
+      Number(
+        record?.quantity ||
+        0
+      ),
+
+    participants:
+      Array.isArray(
+        record?.participants
+      )
+        ? record.participants
+        : [],
+
+    area:
+      record?.area || {}
+  };
+}
+
+
+function postingV2BasePayload(
+  record
+) {
+  return {
+    ...record,
+
+    status:
+      postingRecordStatus(
+        record
+      ),
+
+    version:
+      postingRecordVersion(
+        record
+      ),
+
+    operationId:
+      typeof record?.operationId ===
+        "string"
+        ? record.operationId
+        : "",
+
+    updatedAt:
+      record?.updatedAt ||
+      null,
+
+    updatedByUid:
+      record?.updatedByUid ||
+      null,
+
+    deletedAt:
+      record?.deletedAt ||
+      null,
+
+    deletedByUid:
+      record?.deletedByUid ||
+      null,
+
+    deleteReason:
+      record?.deleteReason ||
+      "",
+
+    deleteComment:
+      record?.deleteComment ||
+      ""
+  };
+}
+
+
+function assertPostingExpectedVersion(
+  current,
+  expectedVersion
+) {
+  const currentVersion =
+    postingRecordVersion(
+      current
+    );
+
+  if (
+    Number(expectedVersion) !==
+    currentVersion
+  ) {
+    const error =
+      new Error(
+        "POSTING_VERSION_CONFLICT"
+      );
+
+    error.code =
+      "POSTING_VERSION_CONFLICT";
+
+    error.currentVersion =
+      currentVersion;
+
+    throw error;
+  }
+
+  return currentVersion;
+}
+
+
+async function getPostingActor() {
+  const user =
+    auth.currentUser;
+
+  if (!user) {
+    throw new Error(
+      "Authentication required."
+    );
+  }
+
+  const staff =
+    await getStaffProfile(
+      user
+    );
+
+  if (
+    !staff ||
+    staff.active !== true ||
+    ![
+      "admin",
+      "support"
+    ].includes(
+      staff.role
+    )
+  ) {
+    throw new Error(
+      "Posting permission required."
+    );
+  }
+
+  return {
+    user,
+    staff
   };
 }
 
@@ -1111,6 +1317,557 @@ window.SeedStudioFirestore = {
     return decodePostingRecord(
       payload
     );
+  },
+
+
+  // ------------------------------------------------------------
+  // Posting Records v2 - transactional update
+  //
+  // Online only. The caller must pass the version that was read
+  // when the edit screen was opened. Legacy records are treated
+  // as version 1 / status active.
+  // ------------------------------------------------------------
+
+  async updatePostingRecord(
+    postingId,
+    expectedVersion,
+    changes,
+    reason = ""
+  ) {
+    const {
+      user
+    } =
+      await getPostingActor();
+
+
+    if (
+      typeof postingId !==
+        "string" ||
+      !postingId.trim()
+    ) {
+      throw new Error(
+        "postingId is required."
+      );
+    }
+
+
+    const editableKeys =
+      new Set([
+        "postingDate",
+        "staffId",
+        "flyerId",
+        "quantity",
+        "participants",
+        "area"
+      ]);
+
+
+    const suppliedChanges =
+      changes &&
+      typeof changes ===
+        "object"
+        ? changes
+        : {};
+
+
+    Object.keys(
+      suppliedChanges
+    ).forEach(
+      (key) => {
+        if (
+          !editableKeys.has(
+            key
+          )
+        ) {
+          throw new Error(
+            `Unsupported Posting edit field: ${key}`
+          );
+        }
+      }
+    );
+
+
+    const reference =
+      doc(
+        db,
+        "postingRecords",
+        postingId.trim()
+      );
+
+
+    const operationId =
+      postingOperationId();
+
+
+    await runTransaction(
+      db,
+
+      async (
+        transaction
+      ) => {
+        const snapshot =
+          await transaction.get(
+            reference
+          );
+
+
+        if (
+          !snapshot.exists()
+        ) {
+          throw new Error(
+            "POSTING_NOT_FOUND"
+          );
+        }
+
+
+        const current =
+          snapshot.data();
+
+
+        if (
+          postingRecordStatus(
+            current
+          ) !== "active"
+        ) {
+          throw new Error(
+            "POSTING_NOT_ACTIVE"
+          );
+        }
+
+
+        const currentVersion =
+          assertPostingExpectedVersion(
+            current,
+            expectedVersion
+          );
+
+
+        const encodedChanges =
+          encodePostingRecord(
+            suppliedChanges
+          );
+
+
+        const currentV2 =
+          postingV2BasePayload(
+            current
+          );
+
+
+        const next = {
+          ...currentV2,
+          ...encodedChanges,
+
+          id:
+            current.id ||
+            postingId.trim(),
+
+          createdAt:
+            current.createdAt,
+
+          createdByUid:
+            current.createdByUid,
+
+          createdByEmail:
+            current.createdByEmail ||
+            "",
+
+          status:
+            "active",
+
+          version:
+            currentVersion + 1,
+
+          operationId,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedByUid:
+            user.uid,
+
+          deletedAt:
+            null,
+
+          deletedByUid:
+            null,
+
+          deleteReason:
+            "",
+
+          deleteComment:
+            ""
+        };
+
+
+        const changeLogReference =
+          doc(
+            db,
+            "postingRecords",
+            postingId.trim(),
+            "changeLogs",
+            operationId
+          );
+
+
+        const log = {
+          action:
+            "update",
+
+          versionBefore:
+            currentVersion,
+
+          versionAfter:
+            currentVersion + 1,
+
+          before:
+            postingAuditSnapshot(
+              currentV2
+            ),
+
+          after:
+            postingAuditSnapshot(
+              next
+            ),
+
+          reason:
+            String(
+              reason ||
+              ""
+            ).trim(),
+
+          actorUid:
+            user.uid,
+
+          actorEmail:
+            user.email ||
+            "",
+
+          operationId,
+
+          changedAt:
+            serverTimestamp()
+        };
+
+
+        transaction.set(
+          reference,
+          next
+        );
+
+
+        transaction.set(
+          changeLogReference,
+          log
+        );
+      }
+    );
+
+
+    const saved =
+      await getDoc(
+        reference
+      );
+
+
+    return decodePostingRecord({
+      id:
+        saved.id,
+
+      ...saved.data()
+    });
+  },
+
+
+  // ------------------------------------------------------------
+  // Posting Records v2 - logical delete
+  //
+  // Admin only. Physical deletion remains prohibited.
+  // ------------------------------------------------------------
+
+  async softDeletePostingRecord(
+    postingId,
+    expectedVersion,
+    deleteReason,
+    deleteComment = ""
+  ) {
+    const {
+      user,
+      staff
+    } =
+      await getPostingActor();
+
+
+    if (
+      staff.role !==
+      "admin"
+    ) {
+      throw new Error(
+        "POSTING_ADMIN_REQUIRED"
+      );
+    }
+
+
+    const normalizedReason =
+      String(
+        deleteReason ||
+        ""
+      ).trim();
+
+
+    if (
+      !normalizedReason
+    ) {
+      throw new Error(
+        "DELETE_REASON_REQUIRED"
+      );
+    }
+
+
+    const reference =
+      doc(
+        db,
+        "postingRecords",
+        postingId
+      );
+
+
+    const operationId =
+      postingOperationId();
+
+
+    await runTransaction(
+      db,
+
+      async (
+        transaction
+      ) => {
+        const snapshot =
+          await transaction.get(
+            reference
+          );
+
+
+        if (
+          !snapshot.exists()
+        ) {
+          throw new Error(
+            "POSTING_NOT_FOUND"
+          );
+        }
+
+
+        const current =
+          snapshot.data();
+
+
+        if (
+          postingRecordStatus(
+            current
+          ) !== "active"
+        ) {
+          throw new Error(
+            "POSTING_NOT_ACTIVE"
+          );
+        }
+
+
+        const currentVersion =
+          assertPostingExpectedVersion(
+            current,
+            expectedVersion
+          );
+
+
+        const currentV2 =
+          postingV2BasePayload(
+            current
+          );
+
+
+        const next = {
+          ...currentV2,
+
+          id:
+            current.id ||
+            postingId,
+
+          createdAt:
+            current.createdAt,
+
+          createdByUid:
+            current.createdByUid,
+
+          createdByEmail:
+            current.createdByEmail ||
+            "",
+
+          status:
+            "deleted",
+
+          version:
+            currentVersion + 1,
+
+          operationId,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedByUid:
+            user.uid,
+
+          deletedAt:
+            serverTimestamp(),
+
+          deletedByUid:
+            user.uid,
+
+          deleteReason:
+            normalizedReason,
+
+          deleteComment:
+            String(
+              deleteComment ||
+              ""
+            ).trim()
+        };
+
+
+        const changeLogReference =
+          doc(
+            db,
+            "postingRecords",
+            postingId,
+            "changeLogs",
+            operationId
+          );
+
+
+        const log = {
+          action:
+            "delete",
+
+          versionBefore:
+            currentVersion,
+
+          versionAfter:
+            currentVersion + 1,
+
+          before:
+            postingAuditSnapshot(
+              currentV2
+            ),
+
+          after:
+            postingAuditSnapshot(
+              next
+            ),
+
+          reason:
+            normalizedReason,
+
+          comment:
+            String(
+              deleteComment ||
+              ""
+            ).trim(),
+
+          actorUid:
+            user.uid,
+
+          actorEmail:
+            user.email ||
+            "",
+
+          operationId,
+
+          changedAt:
+            serverTimestamp()
+        };
+
+
+        transaction.set(
+          reference,
+          next
+        );
+
+
+        transaction.set(
+          changeLogReference,
+          log
+        );
+      }
+    );
+
+
+    const saved =
+      await getDoc(
+        reference
+      );
+
+
+    return decodePostingRecord({
+      id:
+        saved.id,
+
+      ...saved.data()
+    });
+  },
+
+
+  // ------------------------------------------------------------
+  // Posting Records v2 - change log reader
+  // ------------------------------------------------------------
+
+  async listPostingRecordChangeLogs(
+    postingId
+  ) {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Authentication required."
+      );
+    }
+
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "postingRecords",
+          postingId,
+          "changeLogs"
+        )
+      );
+
+
+    return snapshot.docs
+      .map(
+        (
+          documentSnapshot
+        ) => ({
+          id:
+            documentSnapshot.id,
+
+          ...documentSnapshot.data()
+        })
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          Number(
+            b.versionAfter ||
+            0
+          ) -
+          Number(
+            a.versionAfter ||
+            0
+          )
+      );
   },
 
 
