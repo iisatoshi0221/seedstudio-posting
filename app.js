@@ -587,6 +587,25 @@
       return [...this.cache];
     },
 
+    // Normal application views ignore logically deleted records.
+    // Legacy records without status are treated as active.
+    loadActive() {
+      const model =
+        window.SeedStudioPostingRecordModel;
+
+      if (!model) {
+        return this.load().filter(
+          (record) =>
+            record?.status !==
+            "deleted"
+        );
+      }
+
+      return model.filterActive(
+        this.cache
+      );
+    },
+
     async reloadFromFirestore() {
       if (!state.authState.authorized) {
         return;
@@ -1243,7 +1262,7 @@
     const idsInHistory =
       new Set(
         dataRepository
-          .load()
+          .loadActive()
           .flatMap(
             (record) =>
               (record.participants || [])
@@ -1589,7 +1608,7 @@
 
   function getGeoRecords() {
     return dataRepository
-      .load()
+      .loadActive()
       .filter(
         (record) =>
           record.area?.type ===
@@ -1925,7 +1944,7 @@
 
     const records =
       dataRepository
-        .load()
+        .loadActive()
         .filter(
           (record) =>
             (
@@ -3175,7 +3194,7 @@
   function renderHistory() {
     const records =
       dataRepository
-        .load()
+        .loadActive()
         .sort(
           (a, b) =>
             (b.postingDate || "")
@@ -3252,7 +3271,7 @@
 
   async function renderMapStatus() {
     const records =
-      dataRepository.load();
+      dataRepository.loadActive();
 
     if ($("#mapStatusList")) {
       $("#mapStatusList").innerHTML =
@@ -3448,7 +3467,7 @@
       new Set();
 
     dataRepository
-      .load()
+      .loadActive()
       .forEach(
         (record) => {
           if (
@@ -4166,7 +4185,7 @@
       stats =
         monthlyReport
           .buildMonthlyReportStats(
-            dataRepository.load(),
+            dataRepository.loadActive(),
             participantId,
             targetYm
           );
@@ -4373,7 +4392,7 @@
 
     const records =
       dataRepository
-        .load()
+        .loadActive()
         .filter(
           (record) =>
             (
