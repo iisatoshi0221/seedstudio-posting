@@ -1792,3 +1792,112 @@ button{-webkit-tap-highlight-color:transparent}
    while narrowing the block so each original card right edge stays fixed.
    This keeps future digit growth away from the icon without spilling right.
    ============================================================ */
+
+
+/* ============================================================
+   Posting history detail - SP-Next-2C-3
+   ============================================================ */
+
+.history-item--button{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid var(--line);
+  color:inherit;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.history-item--button:active{
+  transform:translateY(1px);
+}
+.history-item__main{
+  min-width:0;
+  flex:1;
+}
+.history-item__chevron{
+  flex:none;
+  color:var(--muted);
+  font-size:28px;
+  line-height:1;
+}
+.history-detail-hero{
+  padding:18px;
+  text-align:center;
+  background:linear-gradient(145deg,#EDF6EF,#FFF9EA);
+}
+.history-detail-hero>small{
+  display:block;
+  color:var(--muted);
+  font-weight:700;
+}
+.history-detail-hero>strong{
+  display:block;
+  margin-top:4px;
+  font-size:20px;
+}
+.history-detail-hero__quantity{
+  margin-top:8px;
+  color:var(--primary-strong);
+  font-size:40px;
+  font-weight:900;
+}
+.history-detail-card{
+  margin-top:14px;
+  padding:16px;
+}
+.history-detail-card h3{
+  margin:0 0 12px;
+  font-size:16px;
+}
+.history-detail-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  padding:10px 0;
+  border-bottom:1px solid var(--line);
+}
+.history-detail-row:last-child{
+  border-bottom:0;
+}
+.history-detail-row span{
+  flex:none;
+  color:var(--muted);
+  font-size:13px;
+}
+.history-detail-row b{
+  min-width:0;
+  text-align:right;
+  overflow-wrap:anywhere;
+}
+.history-detail-participants{
+  display:grid;
+  gap:8px;
+}
+.history-detail-participant{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 12px;
+  border-radius:12px;
+  background:#F7F6F0;
+}
+.history-detail-participant b{
+  flex:none;
+  color:var(--primary-strong);
+}
+.history-detail-map{
+  position:relative;
+  height:280px;
+  overflow:hidden;
+  border-radius:14px;
+  background:#ECEDE8;
+}
+.history-detail-meta .history-detail-row b{
+  font-size:12px;
+  font-weight:700;
+}
