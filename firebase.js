@@ -318,6 +318,19 @@ function encodePostingRecord(
     return record;
   }
 
+  const hasArea =
+    Object.prototype
+      .hasOwnProperty.call(
+        record,
+        "area"
+      );
+
+  if (!hasArea) {
+    return {
+      ...record
+    };
+  }
+
   const area =
     record.area &&
     record.area.type ===
