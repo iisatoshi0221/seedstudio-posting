@@ -109,7 +109,11 @@
     confirmPolygon: null,
 
     historyMap: null,
-    historyPolygons: []
+    historyPolygons: [],
+
+    selectedHistoryRecordId: null,
+    historyDetailMap: null,
+    historyDetailPolygon: null
   };
 
   const milestoneSteps = [
@@ -1754,7 +1758,10 @@
         "月間成果レポート",
 
       history:
-        "配布履歴"
+        "配布履歴",
+
+      "history-detail":
+        "配布実績の詳細"
     };
 
     if ($("#pageTitle")) {
@@ -1815,6 +1822,18 @@
       renderHistory();
     }
 
+    if (
+      view ===
+      "history-detail"
+    ) {
+      renderHistoryDetail();
+
+      window.setTimeout(
+        renderHistoryDetailMap,
+        0
+      );
+    }
+
     if (view === "map") {
       window.setTimeout(
         renderMapStatus,
@@ -1852,7 +1871,10 @@
         "home",
 
       history:
-        "home"
+        "home",
+
+      "history-detail":
+        "history"
     };
 
     navigate(
@@ -3214,54 +3236,420 @@
         records
           .map(
             (record) => `
-              <article class="history-item">
-                <b>
-                  ${escapeHtml(
-                    record.postingDate
-                  )}
-                  　
-                  ${formatNumber(
-                    record.quantity
-                  )}部
-                </b>
+              <button
+                class="history-item history-item--button js-history-detail"
+                type="button"
+                data-posting-id="${escapeHtml(
+                  record.id
+                )}"
+              >
+                <span class="history-item__main">
+                  <b>
+                    ${escapeHtml(
+                      record.postingDate
+                    )}
+                    　
+                    ${formatNumber(
+                      record.quantity
+                    )}部
+                  </b>
 
-                <small>
-                  ${escapeHtml(
-                    names.staff(
-                      record.staffId
-                    )
-                  )}
-                  <br>
-
-                  ${
-                    (
-                      record.participants ||
-                      []
-                    )
-                      .map(
-                        (participant) =>
-                          escapeHtml(
-                            names.participant(
-                              participant
-                                .participantId
-                            )
-                          )
+                  <small>
+                    ${escapeHtml(
+                      names.staff(
+                        record.staffId
                       )
-                      .join("・")
-                  }
+                    )}
+                    <br>
 
-                  <br>
+                    ${
+                      (
+                        record.participants ||
+                        []
+                      )
+                        .map(
+                          (participant) =>
+                            escapeHtml(
+                              names.participant(
+                                participant
+                                  .participantId
+                              )
+                            )
+                        )
+                        .join("・")
+                    }
 
-                  ${escapeHtml(
-                    names.flyer(
-                      record.flyerId
-                    )
-                  )}
-                </small>
-              </article>
+                    <br>
+
+                    ${escapeHtml(
+                      names.flyer(
+                        record.flyerId
+                      )
+                    )}
+                  </small>
+                </span>
+
+                <span
+                  class="history-item__chevron"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+              </button>
             `
           )
           .join("");
+    }
+  }
+
+
+  function selectedHistoryRecord() {
+    const id =
+      state.selectedHistoryRecordId;
+
+    if (!id) {
+      return null;
+    }
+
+    return (
+      dataRepository
+        .loadActive()
+        .find(
+          (record) =>
+            record.id === id
+        ) ||
+      null
+    );
+  }
+
+
+  function formatRecordTimestamp(
+    value
+  ) {
+    if (!value) {
+      return "—";
+    }
+
+    const date =
+      value?.toDate
+        ? value.toDate()
+        : new Date(value);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return "—";
+    }
+
+    return date.toLocaleString(
+      "ja-JP",
+      {
+        year:
+          "numeric",
+
+        month:
+          "numeric",
+
+        day:
+          "numeric",
+
+        hour:
+          "2-digit",
+
+        minute:
+          "2-digit"
+      }
+    );
+  }
+
+
+  function renderHistoryDetail() {
+    const record =
+      selectedHistoryRecord();
+
+    const empty =
+      $("#historyDetailEmpty");
+
+    const content =
+      $("#historyDetailContent");
+
+    if (
+      !empty ||
+      !content
+    ) {
+      return;
+    }
+
+    if (!record) {
+      empty.classList.remove(
+        "is-hidden"
+      );
+
+      content.classList.add(
+        "is-hidden"
+      );
+
+      return;
+    }
+
+    empty.classList.add(
+      "is-hidden"
+    );
+
+    content.classList.remove(
+      "is-hidden"
+    );
+
+    const model =
+      window
+        .SeedStudioPostingRecordModel;
+
+    const version =
+      model
+        ?.getVersion(
+          record
+        ) ||
+      1;
+
+    const legacy =
+      model
+        ?.isLegacy(
+          record
+        ) === true;
+
+    if (
+      $("#historyDetailDate")
+    ) {
+      $("#historyDetailDate")
+        .textContent =
+          record.postingDate ||
+          "—";
+    }
+
+    if (
+      $("#historyDetailQuantity")
+    ) {
+      $("#historyDetailQuantity")
+        .textContent =
+          `${formatNumber(
+            record.quantity
+          )}部`;
+    }
+
+    if (
+      $("#historyDetailStaff")
+    ) {
+      $("#historyDetailStaff")
+        .textContent =
+          names.staff(
+            record.staffId
+          );
+    }
+
+    if (
+      $("#historyDetailFlyer")
+    ) {
+      $("#historyDetailFlyer")
+        .textContent =
+          names.flyer(
+            record.flyerId
+          );
+    }
+
+    if (
+      $("#historyDetailParticipants")
+    ) {
+      $("#historyDetailParticipants")
+        .innerHTML =
+          (
+            record.participants ||
+            []
+          )
+            .map(
+              (participant) => `
+                <div class="history-detail-participant">
+                  <span>
+                    ${escapeHtml(
+                      names.participant(
+                        participant
+                          .participantId
+                      )
+                    )}
+                  </span>
+
+                  <b>
+                    ${formatNumber(
+                      participant.steps
+                    )}歩
+                  </b>
+                </div>
+              `
+            )
+            .join("");
+    }
+
+    if (
+      $("#historyDetailRecordId")
+    ) {
+      $("#historyDetailRecordId")
+        .textContent =
+          record.id ||
+          "—";
+    }
+
+    if (
+      $("#historyDetailVersion")
+    ) {
+      $("#historyDetailVersion")
+        .textContent =
+          legacy
+            ? `v${version}（旧形式）`
+            : `v${version}`;
+    }
+
+    if (
+      $("#historyDetailCreatedAt")
+    ) {
+      $("#historyDetailCreatedAt")
+        .textContent =
+          formatRecordTimestamp(
+            record.createdAt
+          );
+    }
+  }
+
+
+  async function renderHistoryDetailMap() {
+    const record =
+      selectedHistoryRecord();
+
+    const statusId =
+      "#historyDetailMapStatus";
+
+    if (
+      !record ||
+      record.area?.type !==
+        "Polygon" ||
+      !Array.isArray(
+        record.area.coordinates
+      ) ||
+      record.area.coordinates
+        .length < 3
+    ) {
+      setMapStatus(
+        statusId,
+        "配布範囲の記録がありません。"
+      );
+
+      return;
+    }
+
+    try {
+      setMapStatus(
+        statusId,
+        "Google Mapsを読み込み中…"
+      );
+
+      await loadGoogleMaps();
+
+      if (
+        !state.historyDetailMap
+      ) {
+        state.historyDetailMap =
+          new google.maps.Map(
+            $(
+              "#historyDetailGoogleMap"
+            ),
+            {
+              center:
+                DEFAULT_CENTER,
+
+              zoom:
+                DEFAULT_ZOOM,
+
+              mapTypeControl:
+                false,
+
+              streetViewControl:
+                false,
+
+              fullscreenControl:
+                false,
+
+              clickableIcons:
+                false
+            }
+          );
+      }
+
+      if (
+        state.historyDetailPolygon
+      ) {
+        state.historyDetailPolygon
+          .setMap(null);
+      }
+
+      state.historyDetailPolygon =
+        new google.maps.Polygon({
+          paths:
+            toLatLngPath(
+              record.area
+                .coordinates
+            ),
+
+          strokeColor:
+            "#2F6D4F",
+
+          strokeOpacity:
+            1,
+
+          strokeWeight:
+            2,
+
+          fillColor:
+            "#2F6D4F",
+
+          fillOpacity:
+            0.2,
+
+          map:
+            state.historyDetailMap,
+
+          clickable:
+            false
+        });
+
+      fitMapToCoordinates(
+        state.historyDetailMap,
+        record.area.coordinates
+      );
+
+      hideMapStatus(
+        statusId
+      );
+
+      window.setTimeout(
+        () =>
+          google.maps.event
+            .trigger(
+              state.historyDetailMap,
+              "resize"
+            ),
+        50
+      );
+    } catch (error) {
+      console.error(
+        "History detail map error.",
+        error
+      );
+
+      setMapStatus(
+        statusId,
+        "Google Mapsを表示できませんでした。",
+        true
+      );
     }
   }
 
@@ -4871,6 +5259,29 @@
       ?.addEventListener(
         "click",
         goBack
+      );
+
+    $("#historyList")
+      ?.addEventListener(
+        "click",
+        (event) => {
+          const button =
+            event.target.closest(
+              ".js-history-detail"
+            );
+
+          if (!button) {
+            return;
+          }
+
+          state.selectedHistoryRecordId =
+            button.dataset.postingId ||
+            null;
+
+          navigate(
+            "history-detail"
+          );
+        }
       );
 
     $("#participantList")
