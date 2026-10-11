@@ -1,0 +1,3550 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isActiveAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isActiveMealStaff() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role in ['admin', 'support'];
+    }
+
+    // ============================================================
+    // SeedStudio Staff Shift - merged production block
+    // ============================================================
+    // ============================================================
+    // SeedStudio Shift - Firestore Security Rules v0.2
+    //
+    // MEMBER:
+    //   owns Submission / Request facts
+    //
+    // MANAGER:
+    //   owns Adjustment / StaffSettings facts
+    //
+    // Trusted Server:
+    //   owns Month workflow / Confirmed Versions / Notifications
+    //
+    // Confirmed data is never client-writable.
+    // ============================================================
+
+
+    // ============================================================
+    // Authentication / Identity
+    // ============================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authIdentityExists() {
+      return signedIn()
+        && exists(
+          /databases/$(database)/documents/authIdentities/$(request.auth.uid)
+        );
+    }
+
+    function currentPersonId() {
+      return get(
+        /databases/$(database)/documents/authIdentities/$(request.auth.uid)
+      ).data.personId;
+    }
+
+    function isSelf(personId) {
+      return signedIn()
+        && authIdentityExists()
+        && currentPersonId() == personId;
+    }
+
+
+    // ============================================================
+    // Shift Membership
+    // ============================================================
+
+    function membershipId(siteId, personId) {
+      return siteId + "_" + personId;
+    }
+
+    function shiftMembershipExists(siteId, personId) {
+      return exists(
+        /databases/$(database)/documents/shiftMemberships/$(membershipId(siteId, personId))
+      );
+    }
+
+    function shiftMembership(siteId, personId) {
+      return get(
+        /databases/$(database)/documents/shiftMemberships/$(membershipId(siteId, personId))
+      ).data;
+    }
+
+    function isActiveShiftTarget(siteId, personId) {
+      return shiftMembershipExists(siteId, personId)
+        && shiftMembership(siteId, personId).active == true
+        && (
+          shiftMembership(siteId, personId).role == "MEMBER"
+          || shiftMembership(siteId, personId).role == "MANAGER"
+        );
+    }
+
+    function isShiftTargetOnDate(siteId, personId, workDate) {
+      let membership = shiftMembership(siteId, personId);
+
+      return isActiveShiftTarget(siteId, personId)
+        && validDate(workDate)
+        && (
+          !membership.keys().hasAny(["targetFrom"])
+          || (
+            validDate(membership.targetFrom)
+            && membership.targetFrom <= workDate
+          )
+        )
+        && (
+          !membership.keys().hasAny(["targetUntil"])
+          || membership.targetUntil == null
+          || (
+            validDate(membership.targetUntil)
+            && workDate <= membership.targetUntil
+          )
+        );
+    }
+
+    function isShiftMember(siteId) {
+      return signedIn()
+        && authIdentityExists()
+        && isActiveShiftTarget(siteId, currentPersonId());
+    }
+
+    function isShiftManager(siteId) {
+      return isShiftMember(siteId)
+        && shiftMembership(siteId, currentPersonId()).role == "MANAGER";
+    }
+
+
+    // ============================================================
+    // Shift Month
+    // ============================================================
+
+    function shiftMonthExists(monthId) {
+      return exists(
+        /databases/$(database)/documents/shiftMonths/$(monthId)
+      );
+    }
+
+    function shiftMonth(monthId) {
+      return get(
+        /databases/$(database)/documents/shiftMonths/$(monthId)
+      ).data;
+    }
+
+    function monthSiteId(monthId) {
+      return shiftMonth(monthId).siteId;
+    }
+
+    function isRequestOpen(monthId) {
+      return shiftMonthExists(monthId)
+        && shiftMonth(monthId).status == "REQUEST_OPEN"
+        && shiftMonth(monthId).requestDeadline is timestamp
+        && request.time <= shiftMonth(monthId).requestDeadline;
+    }
+
+
+    // ============================================================
+    // Generic validators
+    // ============================================================
+
+    function isNullableString(value) {
+      return value == null || value is string;
+    }
+
+    function validRequestType(value) {
+      return value == "WORK"
+        || value == "FLEXIBLE"
+        || value == "OFF";
+    }
+
+    function validDecision(value) {
+      return value == "WORK"
+        || value == "OFF";
+    }
+
+    function validPatternType(value) {
+      return value == "FIXED"
+        || value == "STANDARD"
+        || value == "FLEXIBLE";
+    }
+
+    function validYearMonth(value) {
+      return value is string
+        && value.matches(
+          '[0-9]{4}-(0[1-9]|1[0-2])'
+        );
+    }
+
+    function validDate(value) {
+      return value is string
+        && value.matches(
+          '[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])'
+        );
+    }
+
+    function dateBelongsToYearMonth(date, yearMonth) {
+      return validDate(date)
+        && validYearMonth(yearMonth)
+        && date[0:7] == yearMonth;
+    }
+
+    function isWorkDateInMonth(monthId, workDate) {
+      return shiftMonthExists(monthId)
+        && dateBelongsToYearMonth(
+          workDate,
+          shiftMonth(monthId).yearMonth
+        );
+    }
+
+
+    // ------------------------------------------------------------
+    // Time format:
+    // 00:00 - 23:59
+    // ------------------------------------------------------------
+
+    function validTime(value) {
+      return value is string
+        && value.matches(
+          '([01][0-9]|2[0-3]):[0-5][0-9]'
+        );
+    }
+
+    function validTimeRange(start, end) {
+      return validTime(start)
+        && validTime(end)
+        && start < end;
+    }
+
+    function validNullableTimeRange(start, end) {
+      return (
+        start == null
+        && end == null
+      )
+      ||
+      validTimeRange(start, end);
+    }
+
+
+    // ------------------------------------------------------------
+    // Work days
+    //
+    // SeedStudio is Mon-Fri operation in Shift v1.
+    // Duplicate weekdays are also rejected.
+    // ------------------------------------------------------------
+
+    function validWorkDays(days) {
+      return days is list
+        && days.hasOnly([
+          "MON",
+          "TUE",
+          "WED",
+          "THU",
+          "FRI"
+        ])
+        && days.size() == days.toSet().size();
+    }
+
+
+    // ------------------------------------------------------------
+    // Staff setting validation
+    // ------------------------------------------------------------
+
+    function validStaffSettingTimes(data) {
+      return (
+        (
+          data.patternType == "FIXED"
+          || data.patternType == "STANDARD"
+        )
+        && validTimeRange(
+          data.defaultStart,
+          data.defaultEnd
+        )
+      )
+      ||
+      (
+        data.patternType == "FLEXIBLE"
+        && validNullableTimeRange(
+          data.defaultStart,
+          data.defaultEnd
+        )
+      );
+    }
+
+
+    // ------------------------------------------------------------
+    // Request time validation
+    // ------------------------------------------------------------
+
+    function validRequestTimes(data) {
+      return (
+        data.requestType == "WORK"
+        && validTimeRange(
+          data.requestedStart,
+          data.requestedEnd
+        )
+      )
+      ||
+      (
+        data.requestType == "OFF"
+        && data.requestedStart == null
+        && data.requestedEnd == null
+      )
+      ||
+      (
+        data.requestType == "FLEXIBLE"
+        && validNullableTimeRange(
+          data.requestedStart,
+          data.requestedEnd
+        )
+      );
+    }
+
+
+    // ------------------------------------------------------------
+    // Adjustment time validation
+    // ------------------------------------------------------------
+
+    function validAdjustmentTimes(data) {
+      return (
+        data.decision == "WORK"
+        && validTimeRange(
+          data.adjustedStart,
+          data.adjustedEnd
+        )
+      )
+      ||
+      (
+        data.decision == "OFF"
+        && data.adjustedStart == null
+        && data.adjustedEnd == null
+      );
+    }
+
+
+    // ============================================================
+    // Platform Core
+    // ============================================================
+
+    match /persons/{personId} {
+      allow get: if isSelf(personId);
+      allow list: if false;
+
+      allow create, update, delete: if false;
+    }
+
+
+    match /authIdentities/{uid} {
+      allow get: if signedIn()
+        && request.auth.uid == uid;
+
+      allow list: if false;
+
+      allow create, update, delete: if false;
+    }
+
+
+    match /sites/{siteId} {
+
+      allow get: if isShiftMember(siteId);
+      allow list: if false;
+
+      allow create, update, delete: if false;
+
+
+      match /businessDays/{date} {
+
+        allow get, list: if isShiftMember(siteId);
+
+        allow create, update, delete: if false;
+      }
+    }
+
+
+    // ============================================================
+    // Shift Membership
+    // ============================================================
+
+    match /shiftMemberships/{membershipDocId} {
+
+      allow get: if signedIn()
+        && authIdentityExists()
+        && (
+          resource.data.personId == currentPersonId()
+          || isShiftManager(resource.data.siteId)
+        );
+
+      // MANAGER queries must be constrained to their site.
+      allow list: if signedIn()
+        && authIdentityExists()
+        && resource.data.siteId is string
+        && isShiftManager(resource.data.siteId);
+
+      // Security administration is Server-only.
+      allow create, update, delete: if false;
+    }
+
+
+    // ============================================================
+    // Shift Staff Settings
+    // ============================================================
+
+    match /shiftStaffSettings/{settingsId} {
+
+      allow get, list, create, update, delete: if false;
+
+
+      match /versions/{effectiveFrom} {
+
+        allow get, list: if signedIn()
+          && authIdentityExists()
+          && (
+            (
+              resource.data.personId == currentPersonId()
+              && isShiftMember(resource.data.siteId)
+            )
+            ||
+            isShiftManager(resource.data.siteId)
+          );
+
+
+        allow create: if signedIn()
+          && authIdentityExists()
+
+          && request.resource.data.keys().hasAll([
+            "siteId",
+            "personId",
+            "effectiveFrom",
+            "patternType",
+            "defaultStart",
+            "defaultEnd",
+            "workDays",
+            "targetDaysPerWeek",
+            "createdByPersonId",
+            "createdAt"
+          ])
+
+          && request.resource.data.keys().hasOnly([
+            "siteId",
+            "personId",
+            "effectiveFrom",
+            "patternType",
+            "defaultStart",
+            "defaultEnd",
+            "workDays",
+            "targetDaysPerWeek",
+            "createdByPersonId",
+            "createdAt"
+          ])
+
+          && request.resource.data.siteId is string
+          && request.resource.data.personId is string
+
+          && isShiftManager(
+            request.resource.data.siteId
+          )
+
+          // Deterministic parent ID.
+          && settingsId
+            == request.resource.data.siteId
+              + "_"
+              + request.resource.data.personId
+
+          // Version ID / effectiveFrom consistency.
+          && request.resource.data.effectiveFrom
+            == effectiveFrom
+
+          && validDate(
+            request.resource.data.effectiveFrom
+          )
+
+          // StaffSettings may only begin while the staff member
+          // is a dated Shift Target.
+          && isShiftTargetOnDate(
+            request.resource.data.siteId,
+            request.resource.data.personId,
+            request.resource.data.effectiveFrom
+          )
+
+          && validPatternType(
+            request.resource.data.patternType
+          )
+
+          && validStaffSettingTimes(
+            request.resource.data
+          )
+
+          && validWorkDays(
+            request.resource.data.workDays
+          )
+
+          && request.resource.data.targetDaysPerWeek is int
+          && request.resource.data.targetDaysPerWeek >= 0
+          && request.resource.data.targetDaysPerWeek <= 5
+
+          // Forced audit fields.
+          && request.resource.data.createdByPersonId
+            == currentPersonId()
+
+          && request.resource.data.createdAt
+            == request.time;
+
+
+        // Version history is immutable.
+        allow update, delete: if false;
+      }
+    }
+
+
+    // ============================================================
+    // Shift Months
+    // ============================================================
+
+    match /shiftMonths/{monthId} {
+
+      allow get, list: if signedIn()
+        && authIdentityExists()
+        && resource.data.siteId is string
+        && isShiftMember(resource.data.siteId);
+
+      // Shift Confirmation Architecture v1.0 = B
+      //
+      // createShiftMonth(), confirmShiftMonth(), version changes,
+      // deadline changes etc. are Trusted Server operations.
+      allow create, update, delete: if false;
+
+
+      // ==========================================================
+      // Submission
+      // ==========================================================
+
+      match /submissions/{personId} {
+
+        allow get: if shiftMonthExists(monthId)
+          && (
+            (
+              isSelf(personId)
+              && isShiftMember(monthSiteId(monthId))
+            )
+            ||
+            isShiftManager(monthSiteId(monthId))
+          );
+
+        allow list: if shiftMonthExists(monthId)
+          && isShiftManager(monthSiteId(monthId));
+
+
+        allow create: if shiftMonthExists(monthId)
+          && isSelf(personId)
+          && isShiftMember(monthSiteId(monthId))
+          && isRequestOpen(monthId)
+
+          && request.resource.data.keys().hasAll([
+            "personId",
+            "status",
+            "submittedAt",
+            "lastUpdatedAt"
+          ])
+
+          && request.resource.data.keys().hasOnly([
+            "personId",
+            "status",
+            "submittedAt",
+            "lastUpdatedAt"
+          ])
+
+          && request.resource.data.personId
+            == currentPersonId()
+
+          && (
+            (
+              request.resource.data.status == "DRAFT"
+              && request.resource.data.submittedAt == null
+            )
+            ||
+            (
+              request.resource.data.status == "SUBMITTED"
+              && request.resource.data.submittedAt == request.time
+            )
+          )
+
+          && request.resource.data.lastUpdatedAt
+            == request.time;
+
+
+        allow update: if shiftMonthExists(monthId)
+          && isSelf(personId)
+          && isShiftMember(monthSiteId(monthId))
+          && isRequestOpen(monthId)
+
+          // Owner is immutable.
+          && request.resource.data.personId
+            == resource.data.personId
+
+          && request.resource.data.personId
+            == currentPersonId()
+
+          // Only these fields may change.
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              "status",
+              "submittedAt",
+              "lastUpdatedAt"
+            ])
+
+          // Allowed transitions:
+          //
+          // DRAFT -> DRAFT
+          // DRAFT -> SUBMITTED
+          // SUBMITTED -> SUBMITTED
+          //
+          // SUBMITTED -> DRAFT = DENY
+          && (
+            (
+              resource.data.status == "DRAFT"
+              && request.resource.data.status == "DRAFT"
+              && request.resource.data.submittedAt == null
+            )
+            ||
+            (
+              resource.data.status == "DRAFT"
+              && request.resource.data.status == "SUBMITTED"
+              && request.resource.data.submittedAt == request.time
+            )
+            ||
+            (
+              resource.data.status == "SUBMITTED"
+              && request.resource.data.status == "SUBMITTED"
+              && request.resource.data.submittedAt
+                == resource.data.submittedAt
+            )
+          )
+
+          && request.resource.data.lastUpdatedAt
+            == request.time;
+
+        allow delete: if false;
+      }
+
+
+      // ==========================================================
+      // Request
+      // ==========================================================
+
+      match /requests/{requestId} {
+
+        allow get: if shiftMonthExists(monthId)
+          && (
+            (
+              isSelf(resource.data.personId)
+              && isShiftMember(monthSiteId(monthId))
+            )
+            ||
+            isShiftManager(monthSiteId(monthId))
+          );
+
+
+        // MEMBER query:
+        //   where("personId", "==", currentPersonId)
+        //
+        // MANAGER:
+        //   may query the whole month.
+        allow list: if shiftMonthExists(monthId)
+          && (
+            (
+              isSelf(resource.data.personId)
+              && isShiftMember(monthSiteId(monthId))
+            )
+            ||
+            isShiftManager(monthSiteId(monthId))
+          );
+
+
+        allow create: if shiftMonthExists(monthId)
+          && isShiftMember(monthSiteId(monthId))
+          && isRequestOpen(monthId)
+
+          && request.resource.data.keys().hasAll([
+            "personId",
+            "workDate",
+            "requestType",
+            "requestedStart",
+            "requestedEnd",
+            "note",
+            "createdAt",
+            "updatedAt"
+          ])
+
+          && request.resource.data.keys().hasOnly([
+            "personId",
+            "workDate",
+            "requestType",
+            "requestedStart",
+            "requestedEnd",
+            "note",
+            "createdAt",
+            "updatedAt"
+          ])
+
+          && request.resource.data.personId
+            == currentPersonId()
+
+          // Deterministic Request ID.
+          && requestId
+            == request.resource.data.personId
+              + "_"
+              + request.resource.data.workDate
+
+          // Date must belong to target month.
+          && isWorkDateInMonth(
+            monthId,
+            request.resource.data.workDate
+          )
+
+          && validRequestType(
+            request.resource.data.requestType
+          )
+
+          && validRequestTimes(
+            request.resource.data
+          )
+
+          && isNullableString(
+            request.resource.data.note
+          )
+
+          // Forced audit timestamps.
+          && request.resource.data.createdAt
+            == request.time
+
+          && request.resource.data.updatedAt
+            == request.time;
+
+
+        allow update: if shiftMonthExists(monthId)
+          && isShiftMember(monthSiteId(monthId))
+          && isRequestOpen(monthId)
+
+          // Ownership / identity are immutable.
+          && resource.data.personId
+            == currentPersonId()
+
+          && request.resource.data.personId
+            == resource.data.personId
+
+          && request.resource.data.workDate
+            == resource.data.workDate
+
+          && request.resource.data.createdAt
+            == resource.data.createdAt
+
+          && isWorkDateInMonth(
+            monthId,
+            request.resource.data.workDate
+          )
+
+          // Only editable fields.
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              "requestType",
+              "requestedStart",
+              "requestedEnd",
+              "note",
+              "updatedAt"
+            ])
+
+          && validRequestType(
+            request.resource.data.requestType
+          )
+
+          && validRequestTimes(
+            request.resource.data
+          )
+
+          && isNullableString(
+            request.resource.data.note
+          )
+
+          && request.resource.data.updatedAt
+            == request.time;
+
+
+        allow delete: if shiftMonthExists(monthId)
+          && isShiftMember(monthSiteId(monthId))
+          && isRequestOpen(monthId)
+          && resource.data.personId
+            == currentPersonId();
+      }
+
+
+      // ==========================================================
+      // Adjustment
+      // ==========================================================
+
+      match /adjustments/{adjustmentId} {
+
+        allow get, list: if shiftMonthExists(monthId)
+          && isShiftManager(monthSiteId(monthId));
+
+
+        allow create: if shiftMonthExists(monthId)
+          && isShiftManager(monthSiteId(monthId))
+          && shiftMonth(monthId).status != "CONFIRMED"
+
+          && request.resource.data.keys().hasAll([
+            "siteId",
+            "personId",
+            "workDate",
+            "decision",
+            "adjustedStart",
+            "adjustedEnd",
+            "reason",
+            "active",
+            "adjustedByPersonId",
+            "createdAt",
+            "updatedAt",
+            "appliedVersion"
+          ])
+
+          && request.resource.data.keys().hasOnly([
+            "siteId",
+            "personId",
+            "workDate",
+            "decision",
+            "adjustedStart",
+            "adjustedEnd",
+            "reason",
+            "active",
+            "adjustedByPersonId",
+            "createdAt",
+            "updatedAt",
+            "appliedVersion"
+          ])
+
+          && request.resource.data.siteId
+            == monthSiteId(monthId)
+
+          && request.resource.data.personId is string
+
+          // Target must be eligible on this workDate.
+          && isShiftTargetOnDate(
+            monthSiteId(monthId),
+            request.resource.data.personId,
+            request.resource.data.workDate
+          )
+
+          && isWorkDateInMonth(
+            monthId,
+            request.resource.data.workDate
+          )
+
+          && validDecision(
+            request.resource.data.decision
+          )
+
+          && validAdjustmentTimes(
+            request.resource.data
+          )
+
+          && isNullableString(
+            request.resource.data.reason
+          )
+
+          && request.resource.data.active is bool
+
+          // Forced actor.
+          && request.resource.data.adjustedByPersonId
+            == currentPersonId()
+
+          // Forced audit timestamps.
+          && request.resource.data.createdAt
+            == request.time
+
+          && request.resource.data.updatedAt
+            == request.time
+
+          // Only Trusted Server may apply an Adjustment
+          // to a confirmed version.
+          && request.resource.data.appliedVersion
+            == null;
+
+
+        allow update: if shiftMonthExists(monthId)
+          && isShiftManager(monthSiteId(monthId))
+          && shiftMonth(monthId).status != "CONFIRMED"
+
+          // Once applied, completely frozen.
+          && resource.data.appliedVersion == null
+          && request.resource.data.appliedVersion == null
+
+          // Identity fields are immutable.
+          && request.resource.data.siteId
+            == resource.data.siteId
+
+          && request.resource.data.personId
+            == resource.data.personId
+
+          && request.resource.data.workDate
+            == resource.data.workDate
+
+          && request.resource.data.adjustedByPersonId
+            == resource.data.adjustedByPersonId
+
+          && request.resource.data.createdAt
+            == resource.data.createdAt
+
+          // Target must still belong to this site.
+          && request.resource.data.siteId
+            == monthSiteId(monthId)
+
+          && isShiftTargetOnDate(
+            monthSiteId(monthId),
+            request.resource.data.personId,
+            request.resource.data.workDate
+          )
+
+          && isWorkDateInMonth(
+            monthId,
+            request.resource.data.workDate
+          )
+
+          // Editable fields only.
+          && request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              "decision",
+              "adjustedStart",
+              "adjustedEnd",
+              "reason",
+              "active",
+              "updatedAt"
+            ])
+
+          && validDecision(
+            request.resource.data.decision
+          )
+
+          && validAdjustmentTimes(
+            request.resource.data
+          )
+
+          && isNullableString(
+            request.resource.data.reason
+          )
+
+          && request.resource.data.active is bool
+
+          && request.resource.data.updatedAt
+            == request.time;
+
+        // Never physically delete manager history.
+        allow delete: if false;
+      }
+
+
+      // ==========================================================
+      // Confirmed Shift Versions
+      // ==========================================================
+
+      match /versions/{versionId} {
+
+        allow get, list: if shiftMonthExists(monthId)
+          && isShiftMember(monthSiteId(monthId));
+
+        // Trusted Server only.
+        allow create, update, delete: if false;
+
+
+        match /entries/{entryId} {
+
+          allow get, list: if shiftMonthExists(monthId)
+            && (
+              (
+                isSelf(resource.data.personId)
+                && isShiftMember(monthSiteId(monthId))
+              )
+              ||
+              isShiftManager(monthSiteId(monthId))
+            );
+
+          // Trusted Server only.
+          allow create, update, delete: if false;
+        }
+      }
+
+
+      // ==========================================================
+      // Notification History
+      // ==========================================================
+
+      match /notifications/{notificationId} {
+
+        allow get, list: if shiftMonthExists(monthId)
+          && isShiftManager(monthSiteId(monthId));
+
+        // Trusted Server only.
+        allow create, update, delete: if false;
+      }
+    }
+    match /staff/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
+    }
+    match /connectionTests/{uid} {
+      allow get: if isActiveAdmin() && request.auth.uid == uid;
+      allow create, update: if isActiveAdmin() && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['message', 'savedAt'])
+        && request.resource.data.keys().hasOnly(['message', 'savedAt'])
+        && request.resource.data.message == 'save-test-ok'
+        && request.resource.data.savedAt == request.time;
+      allow list, delete: if false;
+    }
+    match /mealDemoRecords/{recordId} {
+      function demoAdmin() {
+        return (recordId in ['demo-2026-10-02', 'batch02-2026-10-02', 'batch03-2026-10-02'] || recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-2])-2026-10-02$')) && isActiveMealStaff();
+      }
+      function validRecord(data) {
+        return data.keys().hasAll(['food','version','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['food','version','reason','actor','updatedAt','operationId'])
+          && data.food in ['provided','none']
+          && data.version is int && data.version > 0
+          && data.reason is string && data.reason.size() <= 200
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linkedAudit(data, before) {
+        let path = /databases/$(database)/documents/mealDemoRecords/$(recordId)/history/$(data.operationId);
+        let audit = getAfter(path).data;
+        return !exists(path)
+          && audit.food == data.food && audit.version == data.version
+          && audit.reason == data.reason && audit.actor == data.actor
+          && audit.updatedAt == data.updatedAt && audit.operationId == data.operationId
+          && audit.before == before;
+      }
+      allow get: if demoAdmin();
+      allow list, delete: if false;
+      allow create: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && linkedAudit(request.resource.data, 'unentered');
+      allow update: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.food != resource.data.food
+        && request.resource.data.reason.matches('.*[^\\s].*')
+        && linkedAudit(request.resource.data, resource.data.food);
+      match /history/{operationId} {
+        function validAudit() {
+          let path = /databases/$(database)/documents/mealDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          let data = request.resource.data;
+          return data.keys().hasAll(['food','version','reason','actor','updatedAt','operationId','before'])
+            && data.keys().hasOnly(['food','version','reason','actor','updatedAt','operationId','before'])
+            && data.operationId == operationId && next.operationId == operationId
+            && data.food == next.food && data.version == next.version
+            && data.reason == next.reason && data.actor == request.auth.uid
+            && data.actor == next.actor && data.updatedAt == request.time
+            && data.updatedAt == next.updatedAt
+            && ((!exists(path) && data.version == 1 && data.before == 'unentered')
+              || (exists(path) && data.version == get(path).data.version + 1
+                && data.before == get(path).data.food));
+        }
+        allow read: if demoAdmin();
+        allow create: if demoAdmin() && validAudit();
+        allow update, delete: if false;
+      }
+    }
+
+    match /endDemoRecords/{recordId} {
+      function demoAdmin() {
+        return recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-6])-2026-10-02$') && isActiveMealStaff();
+      }
+      function demoStart() {
+        let path = /databases/$(database)/documents/startDemoRecords/$(recordId);
+        return existsAfter(path) ? getAfter(path).data.start :
+          (recordId in ['bulk03-2026-10-02','bulk10-2026-10-02'] ? '13:00' : '10:30');
+      }
+      function validRecord(data) {
+        return data.keys().hasAll(['end','version','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['end','version','reason','actor','updatedAt','operationId'])
+          && data.end is string && data.end.matches('^(10|11|12|13|14|15):[0-5][0-9]$')
+          && data.end >= '10:30' && data.end <= '15:30' && data.end > demoStart()
+          && data.version is int && data.version > 0
+          && data.reason is string && data.reason.size() <= 200
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linkedAudit(data, before) {
+        let path = /databases/$(database)/documents/endDemoRecords/$(recordId)/history/$(data.operationId);
+        let audit = getAfter(path).data;
+        return !exists(path)
+          && audit.end == data.end && audit.version == data.version
+          && audit.reason == data.reason && audit.actor == data.actor
+          && audit.updatedAt == data.updatedAt && audit.operationId == data.operationId
+          && audit.before == before;
+      }
+      allow get: if demoAdmin();
+      allow list, delete: if false;
+      allow create: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && linkedAudit(request.resource.data, 'unentered');
+      allow update: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.end != resource.data.end
+        && request.resource.data.reason.matches('.*[^\\s].*')
+        && linkedAudit(request.resource.data, resource.data.end);
+      match /history/{operationId} {
+        function validAudit() {
+          let path = /databases/$(database)/documents/endDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          let data = request.resource.data;
+          return data.keys().hasAll(['end','version','reason','actor','updatedAt','operationId','before'])
+            && data.keys().hasOnly(['end','version','reason','actor','updatedAt','operationId','before'])
+            && data.operationId == operationId && next.operationId == operationId
+            && data.end == next.end && data.version == next.version
+            && data.reason == next.reason && data.actor == request.auth.uid
+            && data.actor == next.actor && data.updatedAt == request.time
+            && data.updatedAt == next.updatedAt
+            && ((!exists(path) && data.version == 1 && data.before == 'unentered')
+              || (exists(path) && data.version == get(path).data.version + 1
+                && data.before == get(path).data.end));
+        }
+        allow read: if demoAdmin();
+        allow create: if demoAdmin() && validAudit();
+        allow update, delete: if false;
+      }
+    }
+
+    match /noteDemoRecords/{recordId} {
+      function demoAdmin() {
+        return recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-6])-2026-10-02$') && isActiveMealStaff();
+      }
+      function validRecord(data) {
+        return data.keys().hasAll(['note','version','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['note','version','reason','actor','updatedAt','operationId'])
+          && data.note is string && data.note.size() <= 10000
+          && data.note.matches('(?s).*[^\\s].*')
+          && data.version is int && data.version > 0
+          && data.reason is string && data.reason.size() <= 200
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linkedAudit(data, before) {
+        let path = /databases/$(database)/documents/noteDemoRecords/$(recordId)/history/$(data.operationId);
+        let audit = getAfter(path).data;
+        return !exists(path)
+          && audit.note == data.note && audit.version == data.version
+          && audit.reason == data.reason && audit.actor == data.actor
+          && audit.updatedAt == data.updatedAt && audit.operationId == data.operationId
+          && audit.before == before;
+      }
+      allow get: if demoAdmin();
+      allow list, delete: if false;
+      allow create: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && linkedAudit(request.resource.data, '');
+      allow update: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.note != resource.data.note
+        && request.resource.data.reason.matches('(?s).*[^\\s].*')
+        && linkedAudit(request.resource.data, resource.data.note);
+      match /history/{operationId} {
+        function validAudit() {
+          let path = /databases/$(database)/documents/noteDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          let data = request.resource.data;
+          return data.keys().hasAll(['note','version','reason','actor','updatedAt','operationId','before'])
+            && data.keys().hasOnly(['note','version','reason','actor','updatedAt','operationId','before'])
+            && data.operationId == operationId && next.operationId == operationId
+            && data.note == next.note && data.version == next.version
+            && data.reason == next.reason && data.actor == request.auth.uid
+            && data.actor == next.actor && data.updatedAt == request.time
+            && data.updatedAt == next.updatedAt
+            && ((!exists(path) && data.version == 1 && data.before == '')
+              || (exists(path) && data.version == get(path).data.version + 1
+                && data.before == get(path).data.note));
+        }
+        allow read: if demoAdmin();
+        allow create: if demoAdmin() && validAudit();
+        allow update, delete: if false;
+      }
+    }
+
+    match /startDemoRecords/{recordId} {
+      function demoAdmin() {
+        return recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-6])-2026-10-02$') && isActiveMealStaff();
+      }
+      function validRecord(data) {
+        return data.keys().hasAll(['start','version','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['start','version','reason','actor','updatedAt','operationId'])
+          && data.start is string && data.start.matches('^(10|11|12|13|14|15):[0-5][0-9]$')
+          && data.start >= '10:30' && data.start < '15:30'
+          && (!existsAfter(/databases/$(database)/documents/endDemoRecords/$(recordId))
+            || data.start < getAfter(/databases/$(database)/documents/endDemoRecords/$(recordId)).data.end)
+          && data.version is int && data.version > 0
+          && data.reason is string && data.reason.size() <= 200
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linkedAudit(data, before) {
+        let path = /databases/$(database)/documents/startDemoRecords/$(recordId)/history/$(data.operationId);
+        let audit = getAfter(path).data;
+        return !exists(path)
+          && audit.start == data.start && audit.version == data.version
+          && audit.reason == data.reason && audit.actor == data.actor
+          && audit.updatedAt == data.updatedAt && audit.operationId == data.operationId
+          && audit.before == before;
+      }
+      allow get: if demoAdmin();
+      allow list, delete: if false;
+      allow create: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && linkedAudit(request.resource.data, 'unentered');
+      allow update: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.start != resource.data.start
+        && request.resource.data.reason.matches('.*[^\\s].*')
+        && linkedAudit(request.resource.data, resource.data.start);
+      match /history/{operationId} {
+        function validAudit() {
+          let path = /databases/$(database)/documents/startDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          let data = request.resource.data;
+          return data.keys().hasAll(['start','version','reason','actor','updatedAt','operationId','before'])
+            && data.keys().hasOnly(['start','version','reason','actor','updatedAt','operationId','before'])
+            && data.operationId == operationId && next.operationId == operationId
+            && data.start == next.start && data.version == next.version
+            && data.reason == next.reason && data.actor == request.auth.uid
+            && data.actor == next.actor && data.updatedAt == request.time
+            && data.updatedAt == next.updatedAt
+            && ((!exists(path) && data.version == 1 && data.before == 'unentered')
+              || (exists(path) && data.version == get(path).data.version + 1
+                && data.before == get(path).data.start));
+        }
+        allow read: if demoAdmin();
+        allow create: if demoAdmin() && validAudit();
+        allow update, delete: if false;
+      }
+    }
+
+    match /transportDemoRecords/{recordId} {
+      function demoAdmin() {
+        return recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-2])-2026-10-02-(am|pm)$') && isActiveMealStaff();
+      }
+      function validRecord(data) {
+        return data.keys().hasAll(['status','version','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['status','version','reason','actor','updatedAt','operationId'])
+          && data.status in ['done','none']
+          && data.version is int && data.version > 0
+          && data.reason is string && data.reason.size() <= 200
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linkedAudit(data, before) {
+        let path = /databases/$(database)/documents/transportDemoRecords/$(recordId)/history/$(data.operationId);
+        let audit = getAfter(path).data;
+        return !exists(path)
+          && audit.status == data.status && audit.version == data.version
+          && audit.reason == data.reason && audit.actor == data.actor
+          && audit.updatedAt == data.updatedAt && audit.operationId == data.operationId
+          && audit.before == before;
+      }
+      allow get: if demoAdmin();
+      allow list, delete: if false;
+      allow create: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && linkedAudit(request.resource.data, 'unentered');
+      allow update: if demoAdmin() && validRecord(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.status != resource.data.status
+        && request.resource.data.reason.matches('(?s).*[^\\s].*')
+        && linkedAudit(request.resource.data, resource.data.status);
+      match /history/{operationId} {
+        function validAudit() {
+          let path = /databases/$(database)/documents/transportDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          let data = request.resource.data;
+          return data.keys().hasAll(['status','version','reason','actor','updatedAt','operationId','before'])
+            && data.keys().hasOnly(['status','version','reason','actor','updatedAt','operationId','before'])
+            && data.operationId == operationId && next.operationId == operationId
+            && data.status == next.status && data.version == next.version
+            && data.reason == next.reason && data.actor == request.auth.uid
+            && data.actor == next.actor && data.updatedAt == request.time
+            && data.updatedAt == next.updatedAt
+            && ((!exists(path) && data.version == 1 && data.before == 'unentered')
+              || (exists(path) && data.version == get(path).data.version + 1
+                && data.before == get(path).data.status));
+        }
+        allow read: if demoAdmin();
+        allow create: if demoAdmin() && validAudit();
+        allow update, delete: if false;
+      }
+    }
+
+    match /transferDemoRecords/{recordId} {
+      function permitted() {
+        return recordId.matches('^bulk(0[1-9]|[12][0-9]|3[0-6])-2026-10-02$') && isActiveMealStaff();
+      }
+      function sourcesMatch(v) {
+        return v.keys().hasAll(['start','end','meal','note','am','pm'])
+          && v.keys().hasOnly(['start','end','meal','note','am','pm'])
+          && v.start == getAfter(/databases/$(database)/documents/startDemoRecords/$(recordId)).data.version
+          && v.end == getAfter(/databases/$(database)/documents/endDemoRecords/$(recordId)).data.version
+          && v.note == getAfter(/databases/$(database)/documents/noteDemoRecords/$(recordId)).data.version
+          && (recordId.matches('^bulk3[3-6]-2026-10-02$')
+            ? (v.meal == 0 && v.am == 0 && v.pm == 0)
+            : (v.meal == getAfter(/databases/$(database)/documents/mealDemoRecords/$(recordId)).data.version
+              && v.am == getAfter(/databases/$(database)/documents/transportDemoRecords/$(recordId + '-am')).data.version
+              && v.pm == getAfter(/databases/$(database)/documents/transportDemoRecords/$(recordId + '-pm')).data.version));
+      }
+      function valid(data) {
+        return data.keys().hasAll(['versions','version','state','reason','actor','updatedAt','operationId'])
+          && data.keys().hasOnly(['versions','version','state','reason','actor','updatedAt','operationId'])
+          && data.version is int && data.version > 0 && data.versions is map
+          && data.actor == request.auth.uid && data.updatedAt == request.time
+          && data.operationId is string && data.operationId.matches('^[a-zA-Z0-9-]{1,80}$')
+          && data.state in ['confirmed','cancelled'] && data.reason is string && data.reason.size() <= 200;
+      }
+      function linked(data) {
+        let path = /databases/$(database)/documents/transferDemoRecords/$(recordId)/history/$(data.operationId);
+        return !exists(path) && getAfter(path).data == data;
+      }
+      allow get: if permitted();
+      allow list, delete: if false;
+      allow create: if permitted() && valid(request.resource.data)
+        && request.resource.data.state == 'confirmed' && request.resource.data.reason == ''
+        && sourcesMatch(request.resource.data.versions)
+        && request.resource.data.version == 1 && linked(request.resource.data);
+      allow update: if permitted() && valid(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && ((request.resource.data.state == 'confirmed' && request.resource.data.reason == ''
+            && sourcesMatch(request.resource.data.versions)
+            && (request.resource.data.versions != resource.data.versions
+              || ('state' in resource.data && resource.data.state == 'cancelled')))
+          || (request.resource.data.state == 'cancelled'
+            && (!('state' in resource.data) || resource.data.state == 'confirmed')
+            && request.resource.data.reason.matches('(?s).*[^\\s].*')
+            && request.resource.data.versions == resource.data.versions))
+        && linked(request.resource.data);
+      match /history/{operationId} {
+        function linkedParent() {
+          let path = /databases/$(database)/documents/transferDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          return request.resource.data == next && next.operationId == operationId
+            && next.actor == request.auth.uid && next.updatedAt == request.time
+            && ((!exists(path) && next.version == 1)
+              || (exists(path) && next.version == get(path).data.version + 1));
+        }
+        allow read: if permitted();
+        allow create: if permitted() && linkedParent();
+        allow update, delete: if false;
+      }
+    }
+
+    match /attendanceDemoRecords/{recordId} {
+      function permitted() {
+        return isActiveMealStaff() && recordId.matches('^bulk(0[1-9]|[1-3][0-9]|40)-2026-10-(02|05)$');
+      }
+      function valid(d) {
+        return d.keys().hasAll(['date','userId','attendance','reason','version','actor','updatedAt','operationId'])
+          && d.keys().hasOnly(['date','userId','attendance','reason','version','actor','updatedAt','operationId'])
+          && d.date in ['2026-10-02','2026-10-05'] && d.userId is string
+          && d.userId.matches('^bulk(0[1-9]|[1-3][0-9]|40)$') && recordId == d.userId + '-' + d.date
+          && d.attendance in ['unconfirmed','onsite','home','absent']
+          && d.reason is string && d.reason.size() <= 200
+          && d.version is int && d.version > 0 && d.actor == request.auth.uid && d.updatedAt == request.time
+          && d.operationId is string && d.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function linked(d) {
+        let path = /databases/$(database)/documents/attendanceDemoRecords/$(recordId)/history/$(d.operationId);
+        return !exists(path) && getAfter(path).data == d;
+      }
+      allow get: if permitted();
+      allow list, delete: if false;
+      allow create: if permitted() && valid(request.resource.data)
+        && request.resource.data.version == 1 && request.resource.data.reason == ''
+        && request.resource.data.attendance != 'unconfirmed' && linked(request.resource.data);
+      allow update: if permitted() && valid(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && request.resource.data.attendance != resource.data.attendance
+        && request.resource.data.reason.matches('(?s).*[^\\s].*') && linked(request.resource.data);
+      match /history/{operationId} {
+        function linkedParent() {
+          let path = /databases/$(database)/documents/attendanceDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          return request.resource.data == next && next.operationId == operationId
+            && next.actor == request.auth.uid && next.updatedAt == request.time
+            && ((!exists(path) && next.version == 1)
+              || (exists(path) && next.version == get(path).data.version + 1));
+        }
+        allow read: if permitted();
+        allow create: if permitted() && linkedParent();
+        allow update, delete: if false;
+      }
+    }
+
+    // v0.9 real-user attendance. Legacy demo permissions above remain unchanged.
+    function isActiveStaff() { return isActiveMealStaff(); }
+    function liveCalendarParts(parts) {
+      let y = int(parts[0]);
+      let m = int(parts[1]);
+      let d = int(parts[2]);
+      let leap = y % 400 == 0 || (y % 4 == 0 && y % 100 != 0);
+      let days = m == 2 ? (leap ? 29 : 28) : (m in [4,6,9,11] ? 30 : 31);
+      return y >= 1 && m >= 1 && m <= 12 && d >= 1 && d <= days;
+    }
+    function liveDate(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && liveCalendarParts(value.split('-'));
+    }
+    function liveNotFuture(date) {
+      let p = date.split('-');
+      return timestamp.date(int(p[0]),int(p[1]),int(p[2])) <= (request.time + duration.value(9,'h')).date();
+    }
+    function liveTarget(userId,date) {
+      let u = get(/databases/$(database)/documents/users/$(userId)).data;
+      let b = get(/databases/$(database)/documents/businessDays/$(date)).data;
+      return userId.matches('^U[0-9]{4}$') && liveDate(date)
+        && u.keys().hasAll(['userId','name','active','startDate','endDate'])
+        && u.userId == userId && u.name is string && u.name.matches('(?s).*[^\\s].*') && u.active is bool
+        && liveDate(u.startDate) && u.startDate <= date
+        && (u.endDate == null || (liveDate(u.endDate) && u.startDate <= u.endDate && date <= u.endDate))
+        && b.date == date && b.open == true && (!('note' in b) || b.note is string);
+    }
+    function liveKey(recordId) { return recordId.matches('^U[0-9]{4}-[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+    function liveRead(recordId) {
+      let p = recordId.split('-');
+      return isActiveStaff() && liveKey(recordId) && liveTarget(p[0],p[1]+'-'+p[2]+'-'+p[3]);
+    }
+
+
+	match /users/{userId} {
+	  allow read: if isActiveStaff();
+	  allow write: if false;
+	}
+
+
+    match /businessDays/{date} {
+      allow read: if isActiveStaff();
+      allow write: if false;
+    }
+    // Read-only probes required by the attendance transaction, including missing records.
+    // Do not enable real-user meal/time/note writes in this release.
+    match /{relatedCollection}/{recordId} {
+      allow get: if relatedCollection in ['dailyMealDemoRecords','dailyTimeDemoRecords','dailyNoteDemoRecords'] && liveRead(recordId);
+    }
+    match /attendanceDemoRecords/{recordId} {
+      function validLive(d) {
+        return liveKey(recordId)
+          && d.keys().hasAll(['date','userId','attendance','reason','version','actor','updatedAt','operationId'])
+          && d.keys().hasOnly(['date','userId','attendance','reason','version','actor','updatedAt','operationId'])
+          && d.userId is string && liveTarget(d.userId,d.date)
+          && recordId == d.userId + '-' + d.date
+          && d.attendance in ['unknown','onsite','home','absent']
+          && d.reason is string && d.reason.size() <= 200
+          && d.version is int && d.version > 0 && d.actor == request.auth.uid && d.updatedAt == request.time
+          && d.operationId is string && d.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+      function safeLive(d) {
+        return (d.attendance == 'onsite' || !existsAfter(/databases/$(database)/documents/dailyMealDemoRecords/$(recordId)))
+          && (d.attendance in ['onsite','home'] ||
+            (!existsAfter(/databases/$(database)/documents/dailyTimeDemoRecords/$(recordId))
+            && !existsAfter(/databases/$(database)/documents/dailyNoteDemoRecords/$(recordId))));
+      }
+      function linkedLive(d) {
+        let path = /databases/$(database)/documents/attendanceDemoRecords/$(recordId)/history/$(d.operationId);
+        return !exists(path) && getAfter(path).data == d;
+      }
+      allow get: if liveRead(recordId);
+      allow create: if isActiveStaff() && validLive(request.resource.data)
+	&& liveNotFuture(request.resource.data.date)
+	&& request.resource.data.version == 1 && request.resource.data.reason == ''
+	&& request.resource.data.attendance != 'unknown' && safeLive(request.resource.data) && linkedLive(request.resource.data);
+      allow update: if isActiveStaff() && validLive(request.resource.data)
+	&& liveNotFuture(request.resource.data.date)
+	&& request.resource.data.version == resource.data.version + 1
+	&& request.resource.data.attendance != resource.data.attendance
+	&& request.resource.data.reason.matches('(?s).*[^\\s].*')
+	&& safeLive(request.resource.data) && linkedLive(request.resource.data);
+      match /history/{operationId} {
+        function linkedLiveParent() {
+          let path = /databases/$(database)/documents/attendanceDemoRecords/$(recordId);
+          let next = getAfter(path).data;
+          return request.resource.data == next && next.operationId == operationId
+            && next.actor == request.auth.uid && next.updatedAt == request.time
+            && ((!exists(path) && next.version == 1)
+              || (exists(path) && next.version == get(path).data.version + 1));
+        }
+        allow read: if liveRead(recordId);
+        allow create: if liveRead(recordId) && linkedLiveParent();
+        allow update, delete: if false;
+      }
+    }
+
+    match /dailyMealDemoRecords/{recordId} {
+      function demoPermitted() {
+        return isActiveMealStaff()
+          && recordId.matches('^bulk(0[1-9]|[1-3][0-9]|40)-2026-10-(02|05)$');
+      }
+
+      function livePermitted(d) {
+        return isActiveMealStaff()
+          && recordId == d.userId + '-' + d.date
+          && d.userId.matches('^U[0-9]{4}$')
+          && liveDate(d.date)
+          && liveNotFuture(d.date)
+          && liveTarget(d.userId, d.date);
+      }
+
+      function demoValid(d) {
+        return d.keys().hasAll([
+            'date',
+            'userId',
+            'food',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.keys().hasOnly([
+            'date',
+            'userId',
+            'food',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.date in ['2026-10-02','2026-10-05']
+          && d.userId is string
+          && d.userId.matches('^bulk(0[1-9]|[1-3][0-9]|40)$')
+          && recordId == d.userId + '-' + d.date
+          && d.food in ['provided','none']
+          && d.attendanceVersion is int
+          && d.attendanceVersion > 0
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.attendance == 'onsite'
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.version == d.attendanceVersion
+          && d.reason is string
+          && d.reason.size() <= 200
+          && d.version is int
+          && d.version > 0
+          && d.actor == request.auth.uid
+          && d.updatedAt == request.time
+          && d.operationId is string
+          && d.operationId.matches('^[a-zA-Z0-9-]{1,80}$');
+      }
+
+      function liveValid(d) {
+        return d.keys().hasAll([
+            'date',
+            'userId',
+            'food',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.keys().hasOnly([
+            'date',
+            'userId',
+            'food',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.date is string
+          && d.userId is string
+          && d.food in ['provided','none']
+          && d.attendanceVersion is int
+          && d.attendanceVersion > 0
+          && d.reason is string
+          && d.reason.size() <= 200
+          && d.version is int
+          && d.version > 0
+          && d.actor == request.auth.uid
+          && d.updatedAt == request.time
+          && d.operationId is string
+          && d.operationId.matches('^[a-zA-Z0-9-]{1,80}$')
+          && livePermitted(d)
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.attendance == 'onsite'
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.version == d.attendanceVersion;
+      }
+
+      function valid(d) {
+        return demoPermitted()
+          ? demoValid(d)
+          : liveValid(d);
+      }
+
+
+
+      function linked(d) {
+        let path =
+          /databases/$(database)/documents/dailyMealDemoRecords/$(recordId)/history/$(d.operationId);
+
+        return !exists(path)
+          && getAfter(path).data == d;
+      }
+
+      allow get: if demoPermitted() || liveRead(recordId);
+      allow list, delete: if false;
+
+
+	allow create: if valid(request.resource.data)
+	  && request.resource.data.version == 1
+	  && request.resource.data.reason == ''
+	  && linked(request.resource.data);
+
+
+      allow update: if valid(request.resource.data)
+        && request.resource.data.version == resource.data.version + 1
+        && (
+          request.resource.data.food != resource.data.food
+          || request.resource.data.attendanceVersion
+             != resource.data.attendanceVersion
+        )
+        && request.resource.data.reason.matches('(?s).*[^\\s].*')
+        && linked(request.resource.data);
+
+      match /history/{operationId} {
+        function linkedParent() {
+          let path =
+            /databases/$(database)/documents/dailyMealDemoRecords/$(recordId);
+
+          let next = getAfter(path).data;
+
+          return request.resource.data == next
+            && next.operationId == operationId
+            && next.actor == request.auth.uid
+            && next.updatedAt == request.time
+            && (
+              (!exists(path) && next.version == 1)
+              || (
+                exists(path)
+                && next.version == get(path).data.version + 1
+              )
+            );
+        }
+
+
+        allow read: if demoPermitted() || liveRead(recordId);
+
+        allow create: if (demoPermitted() || liveRead(recordId))
+  && linkedParent();
+
+        allow update, delete: if false;
+      }
+    }
+    match /dailyTimeDemoRecords/{recordId} {
+  function demoPermitted() {
+    return isActiveMealStaff()
+      && recordId.matches(
+        '^bulk(0[1-9]|[1-3][0-9]|40)-2026-10-(02|05)$'
+      );
+  }
+
+  function livePermitted(d) {
+    return isActiveMealStaff()
+      && recordId == d.userId + '-' + d.date
+      && d.userId.matches('^U[0-9]{4}$')
+      && liveDate(d.date)
+      && liveNotFuture(d.date)
+      && liveTarget(d.userId, d.date);
+  }
+
+  function demoValid(d) {
+    return d.keys().hasAll([
+        'date',
+        'userId',
+        'start',
+        'end',
+        'attendanceVersion',
+        'reason',
+        'version',
+        'actor',
+        'updatedAt',
+        'operationId'
+      ])
+      && d.keys().hasOnly([
+        'date',
+        'userId',
+        'start',
+        'end',
+        'attendanceVersion',
+        'reason',
+        'version',
+        'actor',
+        'updatedAt',
+        'operationId'
+      ])
+      && d.date in ['2026-10-02','2026-10-05']
+      && d.userId is string
+      && d.userId.matches(
+        '^bulk(0[1-9]|[1-3][0-9]|40)$'
+      )
+      && recordId == d.userId + '-' + d.date
+      && d.start is string
+      && d.start.matches(
+        '^(10|11|12|13|14|15):[0-5][0-9]$'
+      )
+      && d.start >= '10:30'
+      && d.start < '15:30'
+      && d.end is string
+      && (
+        d.end == ''
+        || (
+          d.end.matches(
+            '^(10|11|12|13|14|15):[0-5][0-9]$'
+          )
+          && d.end > d.start && d.end <= '15:30'
+        )
+      )
+      && d.attendanceVersion is int
+      && d.attendanceVersion > 0
+      && getAfter(
+        /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+      ).data.attendance in ['onsite','home']
+      && getAfter(
+        /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+      ).data.version == d.attendanceVersion
+      && d.reason is string
+      && d.reason.size() <= 200
+      && d.version is int
+      && d.version > 0
+      && d.actor == request.auth.uid
+      && d.updatedAt == request.time
+      && d.operationId is string
+      && d.operationId.matches(
+        '^[a-zA-Z0-9-]{1,80}$'
+      );
+  }
+
+  function liveValid(d) {
+    return d.keys().hasAll([
+        'date',
+        'userId',
+        'start',
+        'end',
+        'attendanceVersion',
+        'reason',
+        'version',
+        'actor',
+        'updatedAt',
+        'operationId'
+      ])
+      && d.keys().hasOnly([
+        'date',
+        'userId',
+        'start',
+        'end',
+        'attendanceVersion',
+        'reason',
+        'version',
+        'actor',
+        'updatedAt',
+        'operationId'
+      ])
+      && d.date is string
+      && d.userId is string
+      && d.start is string
+      && d.start.matches(
+        '^(10|11|12|13|14|15):[0-5][0-9]$'
+      )
+      && d.start >= '10:30'
+      && d.start < '15:30'
+      && d.end is string
+      && (
+        d.end == ''
+        || (
+          d.end.matches(
+            '^(10|11|12|13|14|15):[0-5][0-9]$'
+          )
+          && d.end > d.start && d.end <= '15:30'
+        )
+      )
+      && d.attendanceVersion is int
+      && d.attendanceVersion > 0
+      && d.reason is string
+      && d.reason.size() <= 200
+      && d.version is int
+      && d.version > 0
+      && d.actor == request.auth.uid
+      && d.updatedAt == request.time
+      && d.operationId is string
+      && d.operationId.matches(
+        '^[a-zA-Z0-9-]{1,80}$'
+      )
+      && livePermitted(d)
+      && getAfter(
+        /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+      ).data.attendance in ['onsite','home']
+      && getAfter(
+        /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+      ).data.version == d.attendanceVersion;
+  }
+
+  function valid(d) {
+    return demoPermitted()
+      ? demoValid(d)
+      : liveValid(d);
+  }
+
+  function linked(d) {
+    let path =
+      /databases/$(database)/documents/dailyTimeDemoRecords/$(recordId)/history/$(d.operationId);
+
+    return !exists(path)
+      && getAfter(path).data == d;
+  }
+
+  allow get: if demoPermitted()
+    || liveRead(recordId);
+
+  allow list, delete: if false;
+
+  allow create: if valid(request.resource.data)
+    && request.resource.data.version == 1
+    && request.resource.data.reason == ''
+    && linked(request.resource.data);
+
+  allow update: if valid(request.resource.data)
+    && request.resource.data.version
+       == resource.data.version + 1
+    && (
+      request.resource.data.start
+        != resource.data.start
+      || request.resource.data.end
+        != resource.data.end
+      || request.resource.data.attendanceVersion
+        != resource.data.attendanceVersion
+    )
+    && (
+      (
+        request.resource.data.start
+          != resource.data.start
+        || (
+          resource.data.end != ''
+          && request.resource.data.end
+             != resource.data.end
+        )
+        || request.resource.data.attendanceVersion
+          != resource.data.attendanceVersion
+      )
+      ? request.resource.data.reason.matches(
+          '(?s).*[^\\s].*'
+        )
+      : request.resource.data.reason == ''
+    )
+    && linked(request.resource.data);
+
+  match /history/{operationId} {
+    function linkedParent() {
+      let path =
+        /databases/$(database)/documents/dailyTimeDemoRecords/$(recordId);
+
+      let next =
+        getAfter(path).data;
+
+      return request.resource.data == next
+        && next.operationId == operationId
+        && next.actor == request.auth.uid
+        && next.updatedAt == request.time
+        && (
+          (
+            !exists(path)
+            && next.version == 1
+          )
+          || (
+            exists(path)
+            && next.version
+               == get(path).data.version + 1
+          )
+        );
+    }
+
+    allow read: if demoPermitted()
+      || liveRead(recordId);
+
+    allow create: if (
+        demoPermitted()
+        || liveRead(recordId)
+      )
+      && linkedParent();
+
+    allow update, delete: if false;
+  }
+}
+    match /dailyNoteDemoRecords/{recordId} {
+      function demoPermitted() {
+        return isActiveMealStaff()
+          && recordId.matches(
+            '^bulk(0[1-9]|[1-3][0-9]|40)-2026-10-(02|05)$'
+          );
+      }
+
+      function livePermitted(d) {
+        return isActiveMealStaff()
+          && recordId == d.userId + '-' + d.date
+          && d.userId.matches('^U[0-9]{4}$')
+          && liveDate(d.date)
+          && liveNotFuture(d.date)
+          && liveTarget(d.userId, d.date);
+      }
+
+      function demoValid(d) {
+        return d.keys().hasAll([
+            'date',
+            'userId',
+            'note',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.keys().hasOnly([
+            'date',
+            'userId',
+            'note',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.date in [
+            '2026-10-02',
+            '2026-10-05'
+          ]
+          && d.userId is string
+          && d.userId.matches(
+            '^bulk(0[1-9]|[1-3][0-9]|40)$'
+          )
+          && recordId == d.userId + '-' + d.date
+          && d.note is string
+          && d.note.size() > 0
+          && d.note.size() <= 10000
+          && d.note.matches(
+            '(?s).*[^\\s].*'
+          )
+          && d.attendanceVersion is int
+          && d.attendanceVersion > 0
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.attendance in [
+            'onsite',
+            'home'
+          ]
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.version
+             == d.attendanceVersion
+          && d.reason is string
+          && d.reason.size() <= 200
+          && d.version is int
+          && d.version > 0
+          && d.actor == request.auth.uid
+          && d.updatedAt == request.time
+          && d.operationId is string
+          && d.operationId.matches(
+            '^[a-zA-Z0-9-]{1,80}$'
+          );
+      }
+
+      function liveValid(d) {
+        return d.keys().hasAll([
+            'date',
+            'userId',
+            'note',
+            'attendanceVersion',
+            'reason',
+            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.keys().hasOnly([
+            'date',
+            'userId',
+            'note',
+            'attendanceVersion',
+            'reason',            'version',
+            'actor',
+            'updatedAt',
+            'operationId'
+          ])
+          && d.date is string
+          && d.userId is string
+          && d.note is string
+          && d.note.size() > 0
+          && d.note.size() <= 10000
+          && d.note.matches(
+            '(?s).*[^\\s].*'
+          )
+          && d.attendanceVersion is int
+          && d.attendanceVersion > 0
+          && d.reason is string
+          && d.reason.size() <= 200
+          && d.version is int
+          && d.version > 0
+          && d.actor == request.auth.uid
+          && d.updatedAt == request.time
+          && d.operationId is string
+          && d.operationId.matches(
+            '^[a-zA-Z0-9-]{1,80}$'
+          )
+          && livePermitted(d)
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.attendance in [
+            'onsite',
+            'home'
+          ]
+          && getAfter(
+            /databases/$(database)/documents/attendanceDemoRecords/$(recordId)
+          ).data.version
+             == d.attendanceVersion;
+      }
+
+      function valid(d) {
+        return demoPermitted()
+          ? demoValid(d)
+          : liveValid(d);
+      }
+
+      function linked(d) {
+        let path =
+          /databases/$(database)/documents/dailyNoteDemoRecords/$(recordId)/history/$(d.operationId);
+
+        return !exists(path)
+          && getAfter(path).data == d;
+      }
+
+      allow get: if demoPermitted()
+        || liveRead(recordId);
+
+      allow list, delete: if false;
+
+      allow create: if valid(
+          request.resource.data
+        )
+        && request.resource.data.version == 1
+        && request.resource.data.reason == ''
+        && linked(
+          request.resource.data
+        );
+
+      allow update: if valid(
+          request.resource.data
+        )
+        && request.resource.data.version
+           == resource.data.version + 1
+        && (
+          request.resource.data.note
+            != resource.data.note
+          || request.resource.data.attendanceVersion
+            != resource.data.attendanceVersion
+        )
+        && request.resource.data.reason.matches(
+          '(?s).*[^\\s].*'
+        )
+        && linked(
+          request.resource.data
+        );
+
+      match /history/{operationId} {
+        function linkedParent() {
+          let path =
+            /databases/$(database)/documents/dailyNoteDemoRecords/$(recordId);
+
+          let next =
+            getAfter(path).data;
+
+          return request.resource.data == next
+            && next.operationId == operationId
+            && next.actor == request.auth.uid
+            && next.updatedAt == request.time
+            && (
+              (
+                !exists(path)
+                && next.version == 1
+              )
+              || (
+                exists(path)
+                && next.version
+                   == get(path).data.version + 1
+              )
+            );
+        }
+
+        allow read: if demoPermitted()
+          || liveRead(recordId);
+
+        allow create: if linkedParent();
+
+        allow update, delete: if false;
+      }
+    }
+
+
+    match /userSchedulePlans/{recordId} {
+      function schedulePermitted(d) {
+        return isActiveMealStaff()
+          && recordId == d.userId + '-' + d.date
+          && d.userId.matches('^U[0-9]{4}$')
+          && liveDate(d.date)
+          && liveTarget(d.userId, d.date);
+      }
+
+      function scheduleValue(value) {
+        return value in [
+          'onsite',
+          'home',
+          'off',
+          'undecided'
+        ];
+      }
+
+      function scheduleSlotValue(value) {
+        return value in [
+          'full',
+          'am',
+          'pm'
+        ];
+      }
+
+      function scheduleSlot(d) {
+        return d.get(
+          'attendanceSlot',
+          d.plannedAttendance == 'onsite'
+            ? 'full'
+            : null
+        );
+      }
+
+      function scheduleSlotValid(d) {
+        return (
+            d.plannedAttendance == 'onsite'
+            && scheduleSlotValue(
+              d.attendanceSlot
+            )
+          )
+          || (
+            d.plannedAttendance in [
+              'home',
+              'off',
+              'undecided'
+            ]
+            && d.attendanceSlot == null
+          );
+      }
+
+      function scheduleBeforeSlotValid(
+        before,
+        beforeAttendanceSlot
+      ) {
+        return (
+            before == null
+            && beforeAttendanceSlot == null
+          )
+          || (
+            before == 'onsite'
+            && scheduleSlotValue(
+              beforeAttendanceSlot
+            )
+          )
+          || (
+            before in [
+              'home',
+              'off',
+              'undecided'
+            ]
+            && beforeAttendanceSlot == null
+          );
+      }
+
+      function parentValid(d) {
+        return d.keys().hasAll([
+            'userId',
+            'date',
+            'plannedAttendance',
+            'attendanceSlot',
+            'version',
+            'actor',
+            'operationId',
+            'updatedAt'
+          ])
+          && d.keys().hasOnly([
+            'userId',
+            'date',
+            'plannedAttendance',
+            'attendanceSlot',
+            'version',
+            'actor',
+            'operationId',
+            'updatedAt'
+          ])
+          && d.userId is string
+          && d.date is string
+          && scheduleValue(
+            d.plannedAttendance
+          )
+          && scheduleSlotValid(d)
+          && d.version is int
+          && d.version > 0
+          && d.actor == request.auth.uid
+          && d.operationId is string
+          && d.operationId.matches(
+            '^[a-zA-Z0-9-]{1,80}$'
+          )
+          && d.updatedAt == request.time
+          && schedulePermitted(d);
+      }
+
+      function linkedHistory(d) {
+        let path =
+          /databases/$(database)/documents/userSchedulePlans/$(recordId)/history/$(d.operationId);
+
+        let next =
+          getAfter(path).data;
+
+        return !exists(path)
+          && next.userId == d.userId
+          && next.date == d.date
+          && next.plannedAttendance
+             == d.plannedAttendance
+          && next.attendanceSlot
+             == d.attendanceSlot
+          && next.version
+             == d.version
+          && next.actor
+             == d.actor
+          && next.operationId
+             == d.operationId
+          && next.updatedAt
+             == d.updatedAt;
+      }
+
+      allow get, list:
+        if isActiveMealStaff();
+
+      allow create:
+        if parentValid(
+          request.resource.data
+        )
+        && request.resource.data.version == 1
+        && linkedHistory(
+          request.resource.data
+        );
+
+      allow update:
+        if parentValid(
+          request.resource.data
+        )
+        && request.resource.data.version
+           == resource.data.version + 1
+        && (
+          request.resource.data.plannedAttendance
+            != resource.data.plannedAttendance
+          || request.resource.data.attendanceSlot
+            != scheduleSlot(resource.data)
+        )
+        && linkedHistory(
+          request.resource.data
+        );
+
+      allow delete: if false;
+
+      match /history/{operationId} {
+        function historyValid(d) {
+          return d.keys().hasAll([
+              'userId',
+              'date',
+              'before',
+              'beforeAttendanceSlot',
+              'plannedAttendance',
+              'attendanceSlot',
+              'version',
+              'reason',
+              'actor',
+              'operationId',
+              'updatedAt'
+            ])
+            && d.keys().hasOnly([
+              'userId',
+              'date',
+              'before',
+              'beforeAttendanceSlot',
+              'plannedAttendance',
+              'attendanceSlot',
+              'version',
+              'reason',
+              'actor',
+              'operationId',
+              'updatedAt'
+            ])
+            && d.userId is string
+            && d.userId.matches(
+              '^U[0-9]{4}$'
+            )
+            && d.date is string
+            && liveDate(d.date)
+            && scheduleValue(
+              d.plannedAttendance
+            )
+            && scheduleSlotValid(d)
+            && (
+              d.before == null
+              || scheduleValue(
+                d.before
+              )
+            )
+            && scheduleBeforeSlotValid(
+              d.before,
+              d.beforeAttendanceSlot
+            )
+            && d.version is int
+            && d.version > 0
+            && d.reason is string
+            && d.reason.size() <= 200
+            && d.actor
+               == request.auth.uid
+            && d.operationId
+               == operationId
+            && d.operationId.matches(
+              '^[a-zA-Z0-9-]{1,80}$'
+            )
+            && d.updatedAt
+               == request.time
+            && liveTarget(
+              d.userId,
+              d.date
+            );
+        }
+
+        function linkedParent() {
+          let path =
+            /databases/$(database)/documents/userSchedulePlans/$(recordId);
+
+          let next =
+            getAfter(path).data;
+
+          return historyValid(
+              request.resource.data
+            )
+            && recordId
+               == request.resource.data.userId
+                  + '-'
+                  + request.resource.data.date
+            && next.userId
+               == request.resource.data.userId
+            && next.date
+               == request.resource.data.date
+            && next.plannedAttendance
+               == request.resource.data.plannedAttendance
+            && next.attendanceSlot
+               == request.resource.data.attendanceSlot
+            && next.version
+               == request.resource.data.version
+            && next.actor
+               == request.resource.data.actor
+            && next.operationId
+               == request.resource.data.operationId
+            && next.updatedAt
+               == request.resource.data.updatedAt
+            && (
+              (
+                !exists(path)
+                && next.version == 1
+                && request.resource.data.before == null
+                && request.resource.data.beforeAttendanceSlot
+                   == null
+                && request.resource.data.reason == ''
+              )
+              || (
+                exists(path)
+                && next.version
+                   == get(path).data.version + 1
+                && request.resource.data.before
+                   == get(path).data.plannedAttendance
+                && request.resource.data.beforeAttendanceSlot
+                   == scheduleSlot(
+                     get(path).data
+                   )
+                && request.resource.data.reason.matches(
+                  '(?s).*[^\\s].*'
+                )
+              )
+            );
+        }
+
+        allow read:
+          if isActiveMealStaff();
+
+        allow create:
+          if linkedParent();
+
+        allow update, delete:
+          if false;
+      }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Daily operation plans
+     *
+     * 鄙悟霧讌ｭ譌･縺ｮ讌ｭ蜍呎ｺ門ｙ
+     * - 陦後″騾∬ｿ・
+     * - 蟶ｰ繧企∬ｿ・
+     * - 譏ｼ鬟・
+     *
+     * 譛磯俣莠亥ｮ壹′ onsite 縺ｮ蛻ｩ逕ｨ閠・□縺台ｿ晏ｭ倥〒縺阪ｋ縲・
+     * parent + history 繧貞酔縺・rite縺ｧ菴懈・縺吶ｋ縲・
+     * ---------------------------------------------------------
+     */
+
+    function operationPlanStaff() {
+      return request.auth != null
+        && exists(
+          /databases/$(database)/documents/staff/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/staff/$(request.auth.uid)
+        ).data.active == true
+        && get(
+          /databases/$(database)/documents/staff/$(request.auth.uid)
+        ).data.role in [
+          'admin',
+          'support'
+        ];
+    }
+
+    function operationPlanValue(value) {
+      return value in [
+        'yes',
+        'no',
+        'undecided'
+      ];
+    }
+
+    function operationPlanOperationId(value) {
+      return value is string
+        && value.matches(
+          '^[A-Za-z0-9-]{1,80}$'
+        );
+    }
+
+    function operationPlanUserId(value) {
+      return value is string
+        && value.matches(
+          '^U[0-9]{4}$'
+        );
+    }
+
+    function operationPlanDate(value) {
+      return value is string
+        && value.matches(
+          '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+        );
+    }
+
+    function operationPlanRecordId(
+      recordId,
+      data
+    ) {
+      return operationPlanUserId(
+          data.userId
+        )
+        && operationPlanDate(
+          data.date
+        )
+        && recordId
+          == data.userId
+          + '-'
+          + data.date;
+    }
+
+    function operationPlanContractOk(
+      data
+    ) {
+      let user =
+        get(
+          /databases/$(database)/documents/users/$(data.userId)
+        );
+
+      return user != null
+        && user.data.startDate
+          <= data.date
+        && (
+          user.data.endDate == null
+          || data.date
+            <= user.data.endDate
+        );
+    }
+
+    function operationPlanBusinessDayOk(
+      data
+    ) {
+      return exists(
+          /databases/$(database)/documents/businessDays/$(data.date)
+        )
+        && get(
+          /databases/$(database)/documents/businessDays/$(data.date)
+        ).data.open == true;
+    }
+
+    function operationPlanScheduleOk(
+      recordId
+    ) {
+      return exists(
+          /databases/$(database)/documents/userSchedulePlans/$(recordId)
+        )
+        && get(
+          /databases/$(database)/documents/userSchedulePlans/$(recordId)
+        ).data.plannedAttendance
+          == 'onsite';
+    }
+
+    function operationPlanTargetOk(
+      recordId,
+      data
+    ) {
+      return operationPlanRecordId(
+          recordId,
+          data
+        )
+        && operationPlanContractOk(
+          data
+        )
+        && operationPlanBusinessDayOk(
+          data
+        )
+        && operationPlanScheduleOk(
+          recordId
+        );
+    }
+
+    function operationPlanParentKeys(
+      data
+    ) {
+      return data.keys().hasOnly([
+        'userId',
+        'date',
+        'pickupOut',
+        'pickupBack',
+        'meal',
+        'version',
+        'actor',
+        'operationId',
+        'updatedAt'
+      ]);
+    }
+
+    function operationPlanParentCommon(
+      recordId,
+      data
+    ) {
+      return operationPlanParentKeys(
+          data
+        )
+        && operationPlanTargetOk(
+          recordId,
+          data
+        )
+        && operationPlanValue(
+          data.pickupOut
+        )
+        && operationPlanValue(
+          data.pickupBack
+        )
+        && operationPlanValue(
+          data.meal
+        )
+        && data.version is int
+        && data.version >= 1
+        && data.actor
+          == request.auth.uid
+        && operationPlanOperationId(
+          data.operationId
+        )
+        && data.updatedAt
+          == request.time;
+    }
+
+    function operationPlanChanged(
+      oldData,
+      newData
+    ) {
+      return oldData.pickupOut
+          != newData.pickupOut
+        || oldData.pickupBack
+          != newData.pickupBack
+        || oldData.meal
+          != newData.meal;
+    }
+
+    function operationPlanLinkedHistory(
+      recordId,
+      data
+    ) {
+      let history =
+        getAfter(
+          /databases/$(database)/documents/dailyOperationPlans/$(recordId)/history/$(data.operationId)
+        );
+
+      return history != null
+        && history.data.userId
+          == data.userId
+        && history.data.date
+          == data.date
+        && history.data.pickupOut
+          == data.pickupOut
+        && history.data.pickupBack
+          == data.pickupBack
+        && history.data.meal
+          == data.meal
+        && history.data.version
+          == data.version
+        && history.data.actor
+          == data.actor
+        && history.data.operationId
+          == data.operationId
+        && history.data.updatedAt
+          == request.time;
+    }
+
+    match /dailyOperationPlans/{recordId} {
+      allow get, list:
+        if operationPlanStaff();
+
+      allow create:
+        if operationPlanStaff()
+        && operationPlanParentCommon(
+          recordId,
+          request.resource.data
+        )
+        && request.resource.data.version
+          == 1
+        && operationPlanLinkedHistory(
+          recordId,
+          request.resource.data
+        );
+
+      allow update:
+        if operationPlanStaff()
+        && operationPlanParentCommon(
+          recordId,
+          request.resource.data
+        )
+        && request.resource.data.userId
+          == resource.data.userId
+        && request.resource.data.date
+          == resource.data.date
+        && request.resource.data.version
+          == resource.data.version + 1
+        && operationPlanChanged(
+          resource.data,
+          request.resource.data
+        )
+        && operationPlanLinkedHistory(
+          recordId,
+          request.resource.data
+        );
+
+      allow delete:
+        if false;
+
+      match /history/{operationId} {
+        allow get, list:
+          if operationPlanStaff();
+
+        function operationPlanHistoryKeys(
+          data
+        ) {
+          return data.keys().hasOnly([
+            'userId',
+            'date',
+            'pickupOut',
+            'pickupBack',
+            'meal',
+            'before',
+            'version',
+            'actor',
+            'operationId',
+            'reason',
+            'updatedAt'
+          ]);
+        }
+
+        function operationPlanHistoryCommon(
+          data
+        ) {
+          return operationPlanHistoryKeys(
+              data
+            )
+            && operationPlanRecordId(
+              recordId,
+              data
+            )
+            && operationPlanTargetOk(
+              recordId,
+              data
+            )
+            && operationPlanValue(
+              data.pickupOut
+            )
+            && operationPlanValue(
+              data.pickupBack
+            )
+            && operationPlanValue(
+              data.meal
+            )
+            && data.version is int
+            && data.version >= 1
+            && data.actor
+              == request.auth.uid
+            && data.operationId
+              == operationId
+            && operationPlanOperationId(
+              data.operationId
+            )
+            && data.reason is string
+            && data.reason.size()
+              <= 500
+            && data.updatedAt
+              == request.time;
+        }
+
+        function operationPlanInitialHistory(
+          data
+        ) {
+          return data.version == 1
+            && data.before == null
+            && data.reason == '';
+        }
+
+        function operationPlanCorrectionBefore(
+          data
+        ) {
+          let oldParent =
+            resource == null
+              ? null
+              : resource.data;
+
+          let previous =
+            get(
+              /databases/$(database)/documents/dailyOperationPlans/$(recordId)
+            );
+
+          return previous != null
+            && data.version
+              == previous.data.version + 1
+            && data.before is map
+            && data.before.keys().hasOnly([
+              'pickupOut',
+              'pickupBack',
+              'meal'
+            ])
+            && data.before.pickupOut
+              == previous.data.pickupOut
+            && data.before.pickupBack
+              == previous.data.pickupBack
+            && data.before.meal
+              == previous.data.meal
+            && data.reason.size()
+              > 0;
+        }
+
+        function operationPlanLinkedParent(
+          data
+        ) {
+          let parent =
+            getAfter(
+              /databases/$(database)/documents/dailyOperationPlans/$(recordId)
+            );
+
+          return parent != null
+            && parent.data.userId
+              == data.userId
+            && parent.data.date
+              == data.date
+            && parent.data.pickupOut
+              == data.pickupOut
+            && parent.data.pickupBack
+              == data.pickupBack
+            && parent.data.meal
+              == data.meal
+            && parent.data.version
+              == data.version
+            && parent.data.actor
+              == data.actor
+            && parent.data.operationId
+              == data.operationId
+            && parent.data.updatedAt
+              == request.time;
+        }
+
+        allow create:
+          if operationPlanStaff()
+          && operationPlanHistoryCommon(
+            request.resource.data
+          )
+          && (
+            operationPlanInitialHistory(
+              request.resource.data
+            )
+            ||
+            operationPlanCorrectionBefore(
+              request.resource.data
+            )
+          )
+          && operationPlanLinkedParent(
+            request.resource.data
+          );
+
+        allow update, delete:
+          if false;
+      }
+    }
+
+
+
+    // ============================================================
+// SeedStudio Posting
+// Posting Records v2
+//
+// SP-Next-2C-2
+//
+// Compatibility:
+// - Existing v0.1 create remains accepted during the staged rollout.
+// - Legacy records without status/version are treated as active/version 1
+//   when they are first edited.
+// - Physical delete is always denied.
+// ============================================================
+
+match /postingRecords/{postingId} {
+
+  function postingOperationId(value) {
+    return value is string
+      && value.matches('^posting-[A-Za-z0-9-]{1,120}$');
+  }
+
+  function postingStatus(data) {
+    return data.get('status', 'active');
+  }
+
+  function postingVersion(data) {
+    return data.get('version', 1);
+  }
+
+  function postingBusinessFieldsValid(data) {
+    return data.id == postingId
+      && data.postingDate is string
+      && data.staffId is string
+      && data.flyerId is string
+      && data.quantity is int
+      && data.quantity > 0
+      && data.participants is list
+      && data.participants.size() > 0
+      && data.area is map
+      && data.createdAt is string
+      && data.createdByUid is string
+      && data.createdByEmail is string;
+  }
+
+  function postingV2Keys(data) {
+    return data.keys().hasAll([
+        'id',
+        'postingDate',
+        'staffId',
+        'flyerId',
+        'quantity',
+        'participants',
+        'area',
+        'createdAt',
+        'createdByUid',
+        'createdByEmail',
+        'status',
+        'version',
+        'operationId',
+        'updatedAt',
+        'updatedByUid',
+        'deletedAt',
+        'deletedByUid',
+        'deleteReason',
+        'deleteComment'
+      ])
+      && data.keys().hasOnly([
+        'id',
+        'postingDate',
+        'staffId',
+        'flyerId',
+        'quantity',
+        'participants',
+        'area',
+        'createdAt',
+        'createdByUid',
+        'createdByEmail',
+        'status',
+        'version',
+        'operationId',
+        'updatedAt',
+        'updatedByUid',
+        'deletedAt',
+        'deletedByUid',
+        'deleteReason',
+        'deleteComment'
+      ]);
+  }
+
+  function postingLegacyCreate(data) {
+    return data.keys().hasAll([
+        'id',
+        'postingDate',
+        'staffId',
+        'flyerId',
+        'quantity',
+        'participants',
+        'area',
+        'createdAt',
+        'createdByUid',
+        'createdByEmail'
+      ])
+      && data.keys().hasOnly([
+        'id',
+        'postingDate',
+        'staffId',
+        'flyerId',
+        'quantity',
+        'participants',
+        'area',
+        'createdAt',
+        'createdByUid',
+        'createdByEmail'
+      ])
+      && postingBusinessFieldsValid(data)
+      && data.createdByUid == request.auth.uid;
+  }
+
+  function postingSnapshot(data) {
+    return {
+      'postingDate': data.postingDate,
+      'staffId': data.staffId,
+      'flyerId': data.flyerId,
+      'quantity': data.quantity,
+      'participants': data.participants,
+      'area': data.area
+    };
+  }
+
+  function postingLogPath(operationId) {
+    return /databases/$(database)/documents/postingRecords/$(postingId)/changeLogs/$(operationId);
+  }
+
+  function postingLinkedLog(next, action, beforeVersion) {
+    let path = postingLogPath(next.operationId);
+    let log = getAfter(path).data;
+
+    return !exists(path)
+      && log.action == action
+      && log.versionBefore == beforeVersion
+      && log.versionAfter == next.version
+      && log.before == postingSnapshot(resource.data)
+      && log.after == postingSnapshot(next)
+      && log.actorUid == request.auth.uid
+      && log.operationId == next.operationId
+      && log.changedAt == request.time;
+  }
+
+  // SeedStudio active admin/support may read Posting records.
+  allow get, list:
+    if isActiveMealStaff();
+
+  // Staged rollout:
+  // keep current v0.1 create path working until the client create path
+  // is migrated to v2 in a later phase.
+  allow create:
+    if isActiveMealStaff()
+      && postingLegacyCreate(request.resource.data);
+
+  // Ordinary edit:
+  // admin/support, active record only, immutable creation metadata,
+  // strict +1 version, and an atomic immutable changeLog.
+  allow update:
+    if isActiveMealStaff()
+
+      && postingStatus(resource.data) == 'active'
+      && postingStatus(request.resource.data) == 'active'
+
+      && postingV2Keys(request.resource.data)
+      && postingBusinessFieldsValid(request.resource.data)
+
+      && request.resource.data.id == resource.data.id
+      && request.resource.data.createdAt == resource.data.createdAt
+      && request.resource.data.createdByUid == resource.data.createdByUid
+      && request.resource.data.createdByEmail == resource.data.createdByEmail
+
+      && request.resource.data.version
+        == postingVersion(resource.data) + 1
+
+      && postingOperationId(request.resource.data.operationId)
+
+      && request.resource.data.updatedByUid == request.auth.uid
+      && request.resource.data.updatedAt == request.time
+
+      && request.resource.data.deletedAt == null
+      && request.resource.data.deletedByUid == null
+      && request.resource.data.deleteReason == ''
+      && request.resource.data.deleteComment == ''
+
+      && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasAny([
+          'postingDate',
+          'staffId',
+          'flyerId',
+          'quantity',
+          'participants',
+          'area'
+        ])
+
+      && postingLinkedLog(
+        request.resource.data,
+        'update',
+        postingVersion(resource.data)
+      );
+
+  // Logical delete is represented by an update and is admin-only.
+  allow update:
+    if isActiveAdmin()
+
+      && postingStatus(resource.data) == 'active'
+      && postingStatus(request.resource.data) == 'deleted'
+
+      && postingV2Keys(request.resource.data)
+      && postingBusinessFieldsValid(request.resource.data)
+
+      && request.resource.data.id == resource.data.id
+      && request.resource.data.postingDate == resource.data.postingDate
+      && request.resource.data.staffId == resource.data.staffId
+      && request.resource.data.flyerId == resource.data.flyerId
+      && request.resource.data.quantity == resource.data.quantity
+      && request.resource.data.participants == resource.data.participants
+      && request.resource.data.area == resource.data.area
+      && request.resource.data.createdAt == resource.data.createdAt
+      && request.resource.data.createdByUid == resource.data.createdByUid
+      && request.resource.data.createdByEmail == resource.data.createdByEmail
+
+      && request.resource.data.version
+        == postingVersion(resource.data) + 1
+
+      && postingOperationId(request.resource.data.operationId)
+
+      && request.resource.data.updatedByUid == request.auth.uid
+      && request.resource.data.updatedAt == request.time
+
+      && request.resource.data.deletedAt == request.time
+      && request.resource.data.deletedByUid == request.auth.uid
+      && request.resource.data.deleteReason is string
+      && request.resource.data.deleteReason.matches('(?s).*[^\\s].*')
+      && request.resource.data.deleteReason.size() <= 200
+      && request.resource.data.deleteComment is string
+      && request.resource.data.deleteComment.size() <= 500
+
+      && postingLinkedLog(
+        request.resource.data,
+        'delete',
+        postingVersion(resource.data)
+      );
+
+  // Never physically delete Posting history.
+  allow delete:
+    if false;
+
+
+  match /changeLogs/{operationId} {
+
+    function postingChangeLogCommon(data) {
+      return data.keys().hasAll([
+          'action',
+          'versionBefore',
+          'versionAfter',
+          'before',
+          'after',
+          'reason',
+          'actorUid',
+          'actorEmail',
+          'operationId',
+          'changedAt'
+        ])
+        && data.keys().hasOnly([
+          'action',
+          'versionBefore',
+          'versionAfter',
+          'before',
+          'after',
+          'reason',
+          'comment',
+          'actorUid',
+          'actorEmail',
+          'operationId',
+          'changedAt'
+        ])
+        && data.action in ['update', 'delete']
+        && data.versionBefore is int
+        && data.versionBefore >= 1
+        && data.versionAfter == data.versionBefore + 1
+        && data.before is map
+        && data.after is map
+        && data.reason is string
+        && data.reason.size() <= 500
+        && data.actorUid == request.auth.uid
+        && data.actorEmail is string
+        && data.operationId == operationId
+        && postingOperationId(data.operationId)
+        && data.changedAt == request.time;
+    }
+
+    function postingChangeLogLinkedParent(data) {
+      let parentPath =
+        /databases/$(database)/documents/postingRecords/$(postingId);
+
+      let next =
+        getAfter(parentPath).data;
+
+      return next.operationId == data.operationId
+        && next.version == data.versionAfter
+        && next.updatedByUid == data.actorUid
+        && next.updatedAt == request.time
+        && data.after == postingSnapshot(next)
+        && data.before == postingSnapshot(get(parentPath).data);
+    }
+
+    allow get, list:
+      if isActiveMealStaff();
+
+    allow create:
+      if isActiveMealStaff()
+        && postingChangeLogCommon(request.resource.data)
+        && postingChangeLogLinkedParent(request.resource.data);
+
+    allow update, delete:
+      if false;
+  }
+}
+
+
+
+    // ============================================================
+    // SeedStudio Posting - participant settings
+    // ============================================================
+    // SSS の共通利用者 / Person マスターを正本とし、
+    // Posting 側には「参加候補として表示するか」だけを保持する。
+    // 氏名・在籍状態などはここには複製しない。
+    // ============================================================
+
+    match /postingParticipants/{personId} {
+
+      // 有効な SeedStudio 職員のみ閲覧可
+      allow get, list:
+        if isActiveMealStaff();
+
+      // 初回追加
+      allow create:
+        if isActiveMealStaff()
+
+        && request.resource.data.keys().hasAll([
+          'personId',
+          'enabled',
+          'addedAt',
+          'addedByUid',
+          'updatedAt',
+          'updatedByUid'
+        ])
+
+        && request.resource.data.keys().hasOnly([
+          'personId',
+          'enabled',
+          'addedAt',
+          'addedByUid',
+          'updatedAt',
+          'updatedByUid'
+        ])
+
+        // Document ID と personId を一致させる
+        && request.resource.data.personId == personId
+        && request.resource.data.personId is string
+        && request.resource.data.personId.size() >= 1
+        && request.resource.data.personId.size() <= 100
+
+        // Posting 参加対象かどうか
+        && request.resource.data.enabled is bool
+
+        // 初回登録者・登録日時を強制
+        && request.resource.data.addedByUid == request.auth.uid
+        && request.resource.data.addedAt == request.time
+
+        // 更新者・更新日時も初回時点から保持
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      // enabled の切替のみ許可。
+      // personId / addedAt / addedByUid は変更不可。
+      allow update:
+        if isActiveMealStaff()
+
+        && request.resource.data.keys().hasAll([
+          'personId',
+          'enabled',
+          'addedAt',
+          'addedByUid',
+          'updatedAt',
+          'updatedByUid'
+        ])
+
+        && request.resource.data.keys().hasOnly([
+          'personId',
+          'enabled',
+          'addedAt',
+          'addedByUid',
+          'updatedAt',
+          'updatedByUid'
+        ])
+
+        // Identity / initial audit fields are immutable
+        && request.resource.data.personId == personId
+        && request.resource.data.personId == resource.data.personId
+        && request.resource.data.addedAt == resource.data.addedAt
+        && request.resource.data.addedByUid == resource.data.addedByUid
+
+        // enabled / update audit fields だけ変更可
+        && request.resource.data          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            'enabled',
+            'updatedAt',
+            'updatedByUid'
+          ])
+
+        && request.resource.data.enabled is bool
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      // 履歴保持のため物理削除は禁止
+      allow delete:
+        if false;
+    }
+
+// ============================================================
+// SeedStudio Posting
+// Phase 4 - Posting masters
+// ============================================================
+
+
+// ------------------------------------------------------------
+// Posting staff master
+//
+// postingStaff/{staffId}
+//
+// Fields:
+//   staffId
+//   name
+//   active
+//   displayOrder
+//   createdAt
+//   createdByUid
+//   updatedAt
+//   updatedByUid
+// ------------------------------------------------------------
+
+match /postingStaff/{staffId} {
+
+  // SeedStudioの有効な admin / support は参照可能
+  allow get, list:
+    if isActiveMealStaff();
+
+
+  // 新規作成は admin のみ
+  allow create:
+    if isActiveAdmin()
+
+    && request.resource.data.keys().hasAll([
+      'staffId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    && request.resource.data.keys().hasOnly([
+      'staffId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    // Document ID と staffId は一致必須
+    && request.resource.data.staffId == staffId
+
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+
+    && request.resource.data.active is bool
+
+    && request.resource.data.displayOrder is int
+    && request.resource.data.displayOrder >= 0
+
+    // 作成者
+    && request.resource.data.createdByUid == request.auth.uid
+    && request.resource.data.updatedByUid == request.auth.uid
+
+    // serverTimestamp() を使用
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.updatedAt == request.time;
+
+
+  // 更新は admin のみ
+  allow update:
+    if isActiveAdmin()
+
+    && request.resource.data.keys().hasAll([
+      'staffId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    && request.resource.data.keys().hasOnly([
+      'staffId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    // IDは変更不可
+    && request.resource.data.staffId == staffId
+    && request.resource.data.staffId == resource.data.staffId
+
+    // 作成情報は変更不可
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.createdByUid == resource.data.createdByUid
+
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+
+    && request.resource.data.active is bool
+
+    && request.resource.data.displayOrder is int
+    && request.resource.data.displayOrder >= 0
+
+    // 更新者・更新日時
+    && request.resource.data.updatedByUid == request.auth.uid
+    && request.resource.data.updatedAt == request.time
+
+    // 更新可能フィールドを限定
+    && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly([
+          'name',
+          'active',
+          'displayOrder',
+          'updatedAt',
+          'updatedByUid'
+        ]);
+
+
+  // 過去履歴との整合性維持のため物理削除は禁止
+  allow delete:
+    if false;
+}
+
+
+
+// ------------------------------------------------------------
+// Posting flyer master
+//
+// postingFlyers/{flyerId}
+//
+// Fields:
+//   flyerId
+//   name
+//   active
+//   displayOrder
+//   createdAt
+//   createdByUid
+//   updatedAt
+//   updatedByUid
+// ------------------------------------------------------------
+
+match /postingFlyers/{flyerId} {
+
+  // SeedStudioの有効な admin / support は参照可能
+  allow get, list:
+    if isActiveMealStaff();
+
+
+  // 新規作成は admin のみ
+  allow create:
+    if isActiveAdmin()
+
+    && request.resource.data.keys().hasAll([
+      'flyerId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    && request.resource.data.keys().hasOnly([
+      'flyerId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    // Document ID と flyerId は一致必須
+    && request.resource.data.flyerId == flyerId
+
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 200
+
+    && request.resource.data.active is bool
+
+    && request.resource.data.displayOrder is int
+    && request.resource.data.displayOrder >= 0
+
+    // 作成者
+    && request.resource.data.createdByUid == request.auth.uid
+    && request.resource.data.updatedByUid == request.auth.uid
+
+    // serverTimestamp() を使用
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.updatedAt == request.time;
+
+
+  // 更新は admin のみ
+  allow update:
+    if isActiveAdmin()
+
+    && request.resource.data.keys().hasAll([
+      'flyerId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    && request.resource.data.keys().hasOnly([
+      'flyerId',
+      'name',
+      'active',
+      'displayOrder',
+      'createdAt',
+      'createdByUid',
+      'updatedAt',
+      'updatedByUid'
+    ])
+
+    // IDは変更不可
+    && request.resource.data.flyerId == flyerId
+    && request.resource.data.flyerId == resource.data.flyerId
+
+    // 作成情報は変更不可
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.createdByUid == resource.data.createdByUid
+
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 200
+
+    && request.resource.data.active is bool
+
+    && request.resource.data.displayOrder is int
+    && request.resource.data.displayOrder >= 0
+
+    // 更新者・更新日時
+    && request.resource.data.updatedByUid == request.auth.uid
+    && request.resource.data.updatedAt == request.time
+
+    // 更新可能フィールドを限定
+    && request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly([
+          'name',
+          'active',
+          'displayOrder',
+          'updatedAt',
+          'updatedByUid'
+        ]);
+
+
+  // 過去履歴との整合性維持のため物理削除は禁止
+  allow delete:
+    if false;
+}
+
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
