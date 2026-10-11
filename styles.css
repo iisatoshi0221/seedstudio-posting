@@ -1901,3 +1901,85 @@ button{-webkit-tap-highlight-color:transparent}
   font-size:12px;
   font-weight:700;
 }
+
+
+/* ============================================================
+   Posting history edit - SP-Next-2C-4
+   ============================================================ */
+
+.posting-edit-version{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+  padding:11px 13px;
+  border-radius:13px;
+  background:var(--soft);
+  color:var(--primary-strong);
+  font-size:13px;
+  font-weight:800;
+}
+.posting-edit-section{
+  margin:22px 0;
+}
+.posting-edit-section h3{
+  margin:0 0 10px;
+  font-size:17px;
+}
+.posting-edit-participants{
+  display:grid;
+  gap:10px;
+}
+.posting-edit-participant{
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#fff;
+}
+.posting-edit-participant.is-selected{
+  border-color:#86B596;
+  background:var(--soft);
+}
+.posting-edit-participant__person{
+  display:grid;
+  grid-template-columns:26px 1fr;
+  align-items:center;
+  gap:9px;
+  font-weight:800;
+}
+.posting-edit-participant__person input{
+  width:20px;
+  height:20px;
+  accent-color:var(--primary);
+}
+.posting-edit-participant__person small{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:600;
+}
+.posting-edit-participant__steps{
+  margin-top:9px;
+}
+.posting-edit-map{
+  position:relative;
+  height:360px;
+  overflow:hidden;
+  border:1px solid #D8DED7;
+  border-radius:var(--r-md);
+  background:#EEF3EC;
+}
+.posting-edit-area-status{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+}
+.posting-edit-reason{
+  min-height:92px;
+  padding:12px 14px;
+  resize:vertical;
+  line-height:1.5;
+}
