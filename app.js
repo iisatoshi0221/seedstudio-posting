@@ -1822,14 +1822,26 @@
     draft.participantIds = [];
     if (type !== "staffOnly") {status.textContent = ""; return;}
     draft.staffId = ""; select.value = "";
-    status.textContent = "本人の担当職員情報を確認しています…";
+    delete draft.registrationMode;
+    delete draft.createdByUid;
+    status.textContent = "職員登録権限を確認しています…";
     try {
-      const identity = await window.SeedStudioFirestore.resolvePostingSelf();
-      if (state.draft !== draft || !isStaffOnly(draft) || state.authState.user?.uid !== identity.uid) return;
-      draft.staffId = identity.staffId; draft.createdByUid = identity.uid;
-      select.value = identity.staffId;
-      status.textContent = "職員本人の活動として登録します。参加利用者は0名です。";
-    } catch (error) {status.textContent = "本人の職員対応を確認できません。登録を停止しています。管理者へ確認してください。";}
+      const access = await window.SeedStudioFirestore.getPostingRegistrationAccess();
+      if (state.draft !== draft || !isStaffOnly(draft) || state.authState.user?.uid !== access.uid) return;
+      draft.createdByUid = access.uid;
+      if (access.delegated) {
+        draft.registrationMode = "delegated";
+        select.disabled = false;
+        select.value = "";
+        status.textContent = "会社共通アカウントの代理登録です。活動した職員を選択してください。利用者は0名です。";
+      } else {
+        draft.staffId = access.staffId;
+        select.value = access.staffId;
+        status.textContent = "職員本人の活動として登録します。参加利用者は0名です。";
+      }
+    } catch (error) {
+      status.textContent = "職員登録の権限を確認できません。登録を停止しています。管理者へ確認してください。";
+    }
   }
 
   function resetDraft() {
@@ -3345,9 +3357,18 @@
     let activityFields = {};
     if (isStaffOnly(state.draft)) {
       try {
-        const identity = await window.SeedStudioFirestore.resolvePostingSelf();
-        if (identity.uid !== state.draft.createdByUid || identity.staffId !== state.draft.staffId) throw new Error("POSTING_IDENTITY_MISMATCH");
-        activityFields = {activityType:"staffOnly", staffSteps:staffStepsValue("#staffStepsInput"), createdByUid:identity.uid};
+        if (!state.draft.createdByUid || !state.draft.staffId ||
+            state.draft.createdByUid !== state.authState.user?.uid) throw new Error("POSTING_IDENTITY_MISMATCH");
+        const candidate = {staffId:state.draft.staffId};
+        if (state.draft.registrationMode === "delegated") candidate.registrationMode = "delegated";
+        const identity = await window.SeedStudioFirestore.assertPostingRegistration(candidate);
+        if (identity.uid !== state.draft.createdByUid ||
+            identity.staffId !== state.draft.staffId ||
+            identity.delegated !== (state.draft.registrationMode === "delegated")) {
+          throw new Error("POSTING_IDENTITY_MISMATCH");
+        }
+        activityFields = {activityType:"staffOnly", staffSteps:staffStepsValue("#staffStepsInput"), createdByUid:identity.uid,
+          ...(identity.delegated ? {registrationMode:"delegated"} : {})};
       } catch (error) {
         alert("職員本人の対応または職員歩数を確認してください。未測定は空欄、歩数は0以上の整数です。");
         saveButton.disabled = false; saveButton.textContent = "この内容で登録する"; return;
@@ -3897,7 +3918,8 @@
       $("#historyDetailParticipants").textContent = `職員のみ活動（利用者0名）・職員歩数 ${record.staffSteps === null ? "未測定" : formatNumber(record.staffSteps) + "歩"}`;
     }
     const mayEdit = state.authState.authorized && (!isStaffOnly(record) ||
-      state.authState.staff?.role === "admin" || record.createdByUid === state.authState.user?.uid);
+      state.authState.staff?.role === "admin" ||
+      (record.registrationMode !== "delegated" && record.createdByUid === state.authState.user?.uid));
     const editButton =
       $("#historyDetailEditButton");
 
