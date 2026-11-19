@@ -3451,6 +3451,25 @@
         )}部（計${formatNumber(window.SeedStudioPostingRecordModel.getTotalFlyerQuantity(record))}枚）`;
     }
 
+    const flyerBreakdown = $("#successFlyerBreakdown");
+    if (flyerBreakdown) {
+      const ids = flyerIdsForDisplay(record);
+      const quantity = Number(record.quantity || 0);
+      flyerBreakdown.innerHTML = ids.length
+        ? '<h3>チラシ別の配布枚数</h3>' +
+          ids.map(id =>
+            '<div class="confirm-row"><span>' +
+            escapeHtml(names.flyer(id)) +
+            '</span><b>' + formatNumber(quantity) + '枚</b></div>'
+          ).join("") +
+          '<div class="confirm-row"><strong>全種類の合計</strong><b>' +
+          formatNumber(window.SeedStudioPostingRecordModel.getTotalFlyerQuantity(record)) +
+          '枚</b></div>' +
+          '<p class="help">1種類あたり' + formatNumber(quantity) +
+          '枚を、選択した' + ids.length + '種類にそれぞれ計上しました。</p>'
+        : "";
+    }
+
     const savedAt =
       new Date(
         record.createdAt
