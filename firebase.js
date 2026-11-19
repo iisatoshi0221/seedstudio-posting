@@ -1115,8 +1115,40 @@ async function postingSelfIdentity(expectedStaffId = null, reader = getDoc) {
   return {uid, staffId:id};
 }
 
+async function postingRegistrationAccess() {
+  const {user, staff} = await getPostingActor();
+  if (staff.postingDelegation?.staffOnlyCreate === true) {
+    return {uid:user.uid, delegated:true};
+  }
+  const identity = await postingSelfIdentity();
+  return {...identity, delegated:false};
+}
+
+async function assertPostingRegistration(record, reader = getDoc) {
+  const {user, staff} = await getPostingActor();
+  if (record.registrationMode === "delegated") {
+    if (staff.postingDelegation?.staffOnlyCreate !== true ||
+        typeof record.staffId !== "string" ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(record.staffId)) {
+      throw new Error("POSTING_DELEGATION_DENIED");
+    }
+    const targetSnap = await reader(doc(db, "postingStaff", record.staffId));
+    const target = targetSnap.exists() ? targetSnap.data() : null;
+    if (!target || target.active !== true || target.staffId !== record.staffId) {
+      throw new Error("POSTING_DELEGATION_TARGET_INACTIVE");
+    }
+    return {uid:user.uid, staffId:record.staffId, delegated:true};
+  }
+  if (Object.hasOwn(record, "registrationMode")) {
+    throw new Error("POSTING_REGISTRATION_MODE_INVALID");
+  }
+  return {...await postingSelfIdentity(record.staffId, reader), delegated:false};
+}
+
 window.SeedStudioFirestore = {
   resolvePostingSelf: () => postingSelfIdentity(),
+  getPostingRegistrationAccess: () => postingRegistrationAccess(),
+  assertPostingRegistration: record => assertPostingRegistration(record),
 
   // ==========================================================
   // Phase 4
@@ -1335,7 +1367,9 @@ window.SeedStudioFirestore = {
     postingP03Core().assertPostingQuantity(record);
     if (postingP03Core().activityType(record) === "staffOnly") {
       if (record.createdByUid !== user.uid) throw new Error("POSTING_QUEUE_OWNER_MISMATCH");
-      await postingSelfIdentity(record.staffId);
+      await assertPostingRegistration(record);
+    } else if (Object.hasOwn(record, "registrationMode")) {
+      throw new Error("POSTING_REGISTRATION_MODE_INVALID");
     }
 
     const encodedRecord =
@@ -1368,7 +1402,7 @@ window.SeedStudioFirestore = {
         runTransaction: async (callback) => runTransaction(db, async tx => {
           if (auth.currentUser?.uid !== user.uid) throw new Error("POSTING_QUEUE_OWNER_MISMATCH");
           if (postingP03Core().activityType(record) === "staffOnly") {
-            await postingSelfIdentity(record.staffId, ref => tx.get(ref));
+            await assertPostingRegistration(record, ref => tx.get(ref));
           }
           return callback(tx);
         })
@@ -1493,7 +1527,8 @@ window.SeedStudioFirestore = {
         if (postingP03Core().activityType(current) === "staffOnly") {
           const actor = await transaction.get(doc(db, "staff", user.uid));
           if (actor.data()?.role !== "admin") {
-            if (current.createdByUid !== user.uid) throw new Error("POSTING_NOT_OWNER");
+            if (current.registrationMode === "delegated" ||
+                current.createdByUid !== user.uid) throw new Error("POSTING_NOT_OWNER");
             await postingSelfIdentity(current.staffId, ref => transaction.get(ref));
           }
         }
