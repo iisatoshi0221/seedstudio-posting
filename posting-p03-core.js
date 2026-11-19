@@ -89,7 +89,7 @@
     const value = {};
     for (const key of BUSINESS_FIELDS) value[key] = record?.[key];
     if (Object.hasOwn(record || {}, "flyerIds")) value.flyerIds = record.flyerIds;
-    for (const key of ["activityType", "staffSteps"]) {
+    for (const key of ["activityType", "staffSteps", "registrationMode"]) {
       if (Object.hasOwn(record || {}, key)) value[key] = record[key];
     }
     return value;
