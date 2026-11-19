@@ -3054,7 +3054,28 @@
         "";
     }
 
+    renderQuantityFlyerPreview();
     renderConfirm();
+  }
+
+  function renderQuantityFlyerPreview() {
+    const target = $("#quantityFlyerPreview");
+    if (!target) return;
+    const ids = flyerIdsForDisplay(state.draft);
+    const raw = $("#quantityInput")?.value || "";
+    const quantity = Number(raw);
+    if (!raw || !Number.isSafeInteger(quantity) || quantity <= 0) {
+      target.textContent = "1種類あたりの配布枚数を入力すると、チラシ別枚数と全種類の合計が表示されます。";
+      return;
+    }
+    if (!ids.length) {
+      target.textContent = "配布するチラシを選択してください。";
+      return;
+    }
+    target.innerHTML = `<h3>チラシ別の配布枚数</h3>` +
+      ids.map(id => `<div class="confirm-row"><span>${escapeHtml(names.flyer(id))}</span><b>${formatNumber(quantity)}枚</b></div>`).join("") +
+      `<div class="confirm-row"><strong>全種類の合計</strong><b>${formatNumber(quantity * ids.length)}枚</b></div>` +
+      `<small>1回の活動の共通配布枚数は${formatNumber(quantity)}枚。選択した${ids.length}種類にそれぞれ同じ枚数を計上します。</small>`;
   }
 
   function renderConfirm() {
@@ -3139,11 +3160,11 @@
           </div>
 
           <div class="confirm-row">
-            <span>配布部数</span>
+            <span>1種類あたりの配布枚数</span>
             <b>
               ${formatNumber(
                 state.draft.quantity
-              )}部
+              )}枚
             </b>
           </div>
 
@@ -7676,7 +7697,10 @@
     $("#quantityInput")
       ?.addEventListener(
         "input",
-        renderConfirm
+        () => {
+          renderQuantityFlyerPreview();
+          renderConfirm();
+        }
       );
 
     $("#saveRecordButton")
