@@ -66,7 +66,7 @@
   
   <link
     rel="stylesheet"
-    href="./styles.css?v=20261011-3"
+    href="./styles.css?v=20261117-dev020"
   >
 </head>
 
@@ -387,6 +387,13 @@
         </div>
 
 
+        <!-- P06: flyer management entry -->
+        <button class="home-menu-card" data-nav="flyer-manager" type="button">
+          <span class="home-menu-card__icon">📄</span>
+          <span><strong>チラシ管理</strong><small>追加・名前変更・アーカイブ</small></span>
+          <span>›</span>
+        </button>
+
         <!-- ================================================== -->
         <!-- Monthly summary                                    -->
         <!-- ================================================== -->
@@ -532,6 +539,12 @@
           <!-- Posting participants                             -->
           <!-- ================================================ -->
 
+          <label class="form-field">活動区分
+            <select id="activityTypeSelect" class="select">
+              <option value="normal">通常活動</option><option value="staffOnly">職員のみ活動</option>
+            </select>
+          </label>
+          <p id="staffIdentityStatus" role="status"></p>
           <div class="form-field">
 
             <span>
@@ -623,6 +636,11 @@
 
           </label>
 
+          <fieldset id="flyerChoicesField" class="form-field is-hidden">
+            <legend>配布したチラシ（1〜8種類）</legend>
+            <div id="flyerChoices"></div>
+          </fieldset>
+
 
           <button
             id="goToMapButton"
@@ -636,6 +654,16 @@
 
       </section>
 
+
+      <!-- P06: active staff can maintain flyer master -->
+      <section class="view" data-view="flyer-manager">
+        <section class="section">
+          <h2>チラシ管理</h2>
+          <p class="help">追加・名前変更・アーカイブ。過去の配布履歴は残ります。</p>
+          <button id="postingFlyerManagerAdd" type="button" class="button button--primary">＋ チラシを追加</button>
+          <div id="postingFlyerManagerList" style="margin-top:16px"></div>
+        </section>
+      </section>
 
       <!-- ==================================================== -->
       <!-- POSTING PARTICIPANT MANAGEMENT                       -->
@@ -1120,7 +1148,10 @@
               🚶 今日の歩数
             </span>
 
-            <div
+  <label id="staffStepsField" class="form-field is-hidden">職員歩数（任意・空欄は未測定）
+            <input id="staffStepsInput" class="input" type="number" min="0" step="1" max="9007199254740991">
+          </label>
+                    <div
               id="participantSteps"
               class="participant-steps"
             ></div>
@@ -1828,6 +1859,7 @@
           </h2>
 
 
+          <section class="card" id="postingFlyerStats" aria-label="チラシ別集計"></section>
           <div
             id="historyList"
             class="history-list"
@@ -2163,6 +2195,10 @@
           </label>
 
 
+          <p id="historyEditActivityType"></p>
+          <label id="historyStaffStepsField" class="form-field is-hidden">職員歩数（任意・空欄は未測定）
+            <input id="historyStaffSteps" class="input" type="number" min="0" step="1" max="9007199254740991">
+          </label>
           <label class="form-field">
             担当職員
 
@@ -2181,6 +2217,10 @@
               class="select"
             ></select>
           </label>
+          <fieldset id="historyEditFlyerChoicesField" class="form-field is-hidden">
+            <legend>チラシ（1〜8種類）</legend>
+            <div id="historyEditFlyerChoices"></div>
+          </fieldset>
 
 
           <label class="form-field">
@@ -2315,22 +2355,21 @@
   ></script>
 
   <script
-    src="./posting-record-model.js?v=20261011-1"
+    src="./posting-record-model.js?v=20261117-dev020"
   ></script>
 
+  <script src="./posting-p03-core.js?v=20261117-dev020"></script>
   <script
     type="module"
-    src="./firebase.js?v=20261011-2"
+    src="./firebase.js?v=20261117-dev020"
   ></script>
 
   <script
     src="./monthly-report.js?v=20261011-1"
   ></script>
 
-  <script
-    src="./app.js?v=20261011-4"
-    defer
-  ></script>
+  <script src="./posting-flyer-ui.js?v=20261117-dev020"></script>
+  <script src="./app.js?v=20261117-dev020" defer></script>
 
 </body>
 

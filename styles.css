@@ -2117,3 +2117,10 @@ button{-webkit-tap-highlight-color:transparent}
   font-size:11px;
   line-height:1.6;
 }
+
+/* DEV-020: readable multi-selection and small master list. */
+.flyer-choice{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 4px;overflow-wrap:anywhere}
+.flyer-choice input{width:20px;height:20px;flex-shrink:0;accent-color:var(--primary)}
+#postingFlyerStats{padding:16px;margin-bottom:12px;font-size:14px;line-height:1.7;overflow-wrap:anywhere}
+#postingFlyerManagerList .card{padding:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+#postingFlyerManagerList strong{width:100%;overflow-wrap:anywhere}

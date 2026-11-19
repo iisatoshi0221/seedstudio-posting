@@ -437,38 +437,14 @@ function postingOperationId() {
 }
 
 
-function postingAuditSnapshot(
-  record
-) {
-  return {
-    postingDate:
-      record?.postingDate ||
-      "",
+function postingAuditSnapshot(record) {
+  return postingP03Core().auditSnapshot(record);
+}
 
-    staffId:
-      record?.staffId ||
-      "",
-
-    flyerId:
-      record?.flyerId ||
-      "",
-
-    quantity:
-      Number(
-        record?.quantity ||
-        0
-      ),
-
-    participants:
-      Array.isArray(
-        record?.participants
-      )
-        ? record.participants
-        : [],
-
-    area:
-      record?.area || {}
-  };
+function postingP03Core() {
+  const core = window.SeedStudioPostingP03Core;
+  if (!core) throw new Error("POSTING_P03_CORE_UNAVAILABLE");
+  return core;
 }
 
 
@@ -1120,7 +1096,27 @@ function normalizePostingFlyer(
 // Firestore bridge
 // ============================================================
 
+
+// Reciprocal stable IDs only. Never infer identity from names or email.
+async function postingSelfIdentity(expectedStaffId = null, reader = getDoc) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("POSTING_IDENTITY_REQUIRED");
+  const profileSnap = await reader(doc(db, "staff", uid));
+  const profile = profileSnap.exists() ? profileSnap.data() : null;
+  const id = profile?.postingStaffId;
+  if (profile?.active !== true || !["admin", "support"].includes(profile.role) ||
+      typeof id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(id) ||
+      (expectedStaffId !== null && id !== expectedStaffId)) throw new Error("POSTING_IDENTITY_MISMATCH");
+  const targetSnap = await reader(doc(db, "postingStaff", id));
+  const target = targetSnap.exists() ? targetSnap.data() : null;
+  if (target?.active !== true || target.staffId !== id || target.authUid !== uid || auth.currentUser?.uid !== uid) {
+    throw new Error("POSTING_IDENTITY_MISMATCH");
+  }
+  return {uid, staffId:id};
+}
+
 window.SeedStudioFirestore = {
+  resolvePostingSelf: () => postingSelfIdentity(),
 
   // ==========================================================
   // Phase 4
@@ -1176,6 +1172,45 @@ window.SeedStudioFirestore = {
       );
   },
 
+
+  // P06: all mutations use existing postingFlyers schema. Document IDs never change.
+  async createPostingFlyer(name) {
+    const {user} = await getPostingActor();
+    const normalized=String(name||'').trim();
+    if (!normalized || normalized.length>200) throw new Error('FLYER_NAME_INVALID');
+    // Unique auto ID, valid under Posting selection contract.
+    const reference=doc(collection(db,'postingFlyers'));
+    const payload={flyerId:reference.id,name:normalized,active:true,
+      displayOrder:Date.now(),createdAt:serverTimestamp(),createdByUid:user.uid,
+      updatedAt:serverTimestamp(),updatedByUid:user.uid};
+    await setDoc(reference,payload);
+    return reference.id;
+  },
+
+  async updatePostingFlyer(flyerId,updates) {
+    const {user} = await getPostingActor();
+    if (typeof flyerId!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(flyerId))
+      throw new Error('FLYER_ID_INVALID');
+    const fields=Object.keys(updates||{});
+    if(fields.length!==1 || !['name','active'].includes(fields[0]))
+      throw new Error('FLYER_EDIT_INVALID');
+    if(fields[0]==='name' && (!String(updates.name||'').trim() || String(updates.name).trim().length>200))
+      throw new Error('FLYER_NAME_INVALID');
+    if(fields[0]==='active' && updates.active!==false)
+      throw new Error('FLYER_ARCHIVE_ONLY');
+    const reference=doc(db,'postingFlyers',flyerId);
+    await runTransaction(db,async transaction=>{
+      const snapshot=await transaction.get(reference);
+      if(!snapshot.exists()) throw new Error('FLYER_NOT_FOUND');
+      const current=snapshot.data();
+      if(fields[0]==='active' && current.active===false) return;
+      if(fields[0]==='name' && current.name===updates.name.trim()) return;
+      transaction.update(reference,{
+        [fields[0]]:fields[0]==='name'?updates.name.trim():false,
+        updatedAt:serverTimestamp(),updatedByUid:user.uid
+      });
+    });
+  },
 
   async listPostingFlyers() {
     const user =
@@ -1293,6 +1328,16 @@ window.SeedStudioFirestore = {
     }
 
 
+    const {syncIssue, storageMode, ...businessRecord} = record;
+    record = businessRecord;
+    // Validate selection and quantity locally before attempting Firestore write.
+    postingP03Core().assertActivity(record);
+    postingP03Core().assertPostingQuantity(record);
+    if (postingP03Core().activityType(record) === "staffOnly") {
+      if (record.createdByUid !== user.uid) throw new Error("POSTING_QUEUE_OWNER_MISMATCH");
+      await postingSelfIdentity(record.staffId);
+    }
+
     const encodedRecord =
       encodePostingRecord(
         record
@@ -1317,19 +1362,23 @@ window.SeedStudioFirestore = {
     );
 
 
-    await setDoc(
-      doc(
-        db,
-        "postingRecords",
-        record.id
-      ),
-      payload
+    const reference = doc(db, "postingRecords", record.id);
+    const result = await postingP03Core().createOnce(
+      {
+        runTransaction: async (callback) => runTransaction(db, async tx => {
+          if (auth.currentUser?.uid !== user.uid) throw new Error("POSTING_QUEUE_OWNER_MISMATCH");
+          if (postingP03Core().activityType(record) === "staffOnly") {
+            await postingSelfIdentity(record.staffId, ref => tx.get(ref));
+          }
+          return callback(tx);
+        })
+      },
+      reference,
+      payload,
+      user.uid
     );
 
-
-    return decodePostingRecord(
-      payload
-    );
+    return decodePostingRecord(result.record);
   },
 
 
@@ -1369,8 +1418,10 @@ window.SeedStudioFirestore = {
         "postingDate",
         "staffId",
         "flyerId",
+        "flyerIds",
         "quantity",
         "participants",
+        "staffSteps",
         "area"
       ]);
 
@@ -1435,6 +1486,18 @@ window.SeedStudioFirestore = {
 
         const current =
           snapshot.data();
+        if (postingP03Core().activityType(current) === "staffOnly" &&
+            Object.hasOwn(suppliedChanges, "staffId") && suppliedChanges.staffId !== current.staffId) {
+          throw new Error("POSTING_STAFF_IMMUTABLE");
+        }
+        if (postingP03Core().activityType(current) === "staffOnly") {
+          const actor = await transaction.get(doc(db, "staff", user.uid));
+          if (actor.data()?.role !== "admin") {
+            if (current.createdByUid !== user.uid) throw new Error("POSTING_NOT_OWNER");
+            await postingSelfIdentity(current.staffId, ref => transaction.get(ref));
+          }
+        }
+
 
 
         if (
@@ -1512,6 +1575,9 @@ window.SeedStudioFirestore = {
             ""
         };
 
+
+        postingP03Core().assertActivity(next);
+        postingP03Core().assertPostingQuantity(next);
 
         const changeLogReference =
           doc(
@@ -1745,6 +1811,9 @@ window.SeedStudioFirestore = {
             ).trim()
         };
 
+
+        postingP03Core().assertActivity(next);
+        postingP03Core().assertPostingQuantity(next);
 
         const changeLogReference =
           doc(

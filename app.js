@@ -7,6 +7,65 @@
   // MVP - Firestore masters + resilient sync
   // ============================================================
 
+  // DEC-121: one activity selects 1–8 flyers; quantity stays common.
+  const MULTI_FLYER_UI_ENABLED = true;
+  let registerFlyerUi = null;
+  let editFlyerUi = null;
+
+  function flyerUiFactory() {
+    const model = window.SeedStudioPostingRecordModel;
+    const ui = window.SeedStudioPostingFlyerUi;
+    if (!model || !ui) throw new Error("POSTING_MULTI_FLYER_UI_UNAVAILABLE");
+    return ui.makeFlyerUi(model);
+  }
+
+  function flyerIdsForDisplay(record) {
+    return window.SeedStudioPostingRecordModel?.getFlyerIds(record) ||
+      (record?.flyerId ? [record.flyerId] : []);
+  }
+
+  function flyerNamesText(record) {
+    return flyerIdsForDisplay(record).map(id => names.flyer(id)).join("・");
+  }
+
+  function flyerNamesHtml(record) { return escapeHtml(flyerNamesText(record)); }
+
+  function renderRegisterFlyerChoices() {
+    if (!MULTI_FLYER_UI_ENABLED) return;
+    const select = $("#flyerSelect");
+    const container = $("#flyerChoices");
+    if (!select || !container) throw new Error("FLYER_CONTROLS_MISSING");
+    select.closest(".form-field")?.classList.add("is-hidden");
+    $("#flyerChoicesField")?.classList.remove("is-hidden");
+    registerFlyerUi?.destroy();
+    registerFlyerUi = flyerUiFactory().mount({
+      container,document,mode:"new",flyers:master.flyers,
+      selectedIds:state.draft.flyerIds || [],resolveLabel:names.flyer,
+      onChange(ids) {
+        state.draft.flyerIds = ids;
+        state.draft.flyerId = ids[0] || "";
+      }
+    });
+  }
+
+  function renderEditFlyerChoices() {
+    if (!MULTI_FLYER_UI_ENABLED) return;
+    const select = $("#historyEditFlyer");
+    const container = $("#historyEditFlyerChoices");
+    if (!select || !container) throw new Error("HISTORY_FLYER_CONTROLS_MISSING");
+    select.closest(".form-field")?.classList.add("is-hidden");
+    $("#historyEditFlyerChoicesField")?.classList.remove("is-hidden");
+    editFlyerUi?.destroy();
+    editFlyerUi = flyerUiFactory().mount({
+      container,document,mode:"edit",flyers:master.flyers,
+      selectedIds:state.editDraft.flyerIds,resolveLabel:names.flyer,
+      onChange(ids) {
+        state.editDraft.flyerIds = ids;
+        state.editDraft.flyerId = ids[0] || "";
+      }
+    });
+  }
+
   const STORAGE_KEY = "seedstudio-posting-v0.1-records";
   const PENDING_STORAGE_KEY = "seedstudio-posting-v0.1-pending";
 
@@ -492,6 +551,7 @@
         const record of pending
       ) {
         try {
+          if (isStaffOnly(record) && record.createdByUid !== state.authState.user?.uid) throw new Error("POSTING_QUEUE_OWNER_MISMATCH");
           const saved =
             await window.SeedStudioFirestore
               .savePostingRecord(
@@ -689,6 +749,8 @@
           error
         );
 
+        const saveState = window.SeedStudioPostingP03Core.classifySaveError(error);
+        record = {...record, syncIssue: saveState === "retryable" ? "pending" : "review"};
         // 保存失敗時は通常キャッシュとは別の
         // 未同期キューにも必ず保持する。
         this.addPending(
@@ -707,7 +769,7 @@
           "pending";
 
         return {
-          mode: "pending",
+          mode: record.syncIssue,
           record
         };
       }
@@ -1741,7 +1803,40 @@
   // Draft
   // ============================================================
 
+
+  function isStaffOnly(record) { return record?.activityType === "staffOnly"; }
+  function staffStepsValue(selector) {
+    const input = $(selector);
+    if (!input || input.validity.badInput) throw new Error("INVALID_STAFF_STEPS");
+    return window.SeedStudioPostingRecordModel.parseStaffSteps(input.value);
+  }
+  async function selectActivityType() {
+    const draft = state.draft;
+    const type = $("#activityTypeSelect")?.value || "normal";
+    draft.activityType = type;
+    draft.staffSteps = null;
+    const status = $("#staffIdentityStatus");
+    const select = $("#staffSelect");
+    select.disabled = type === "staffOnly";
+    $$("#participantList input").forEach(input => {input.disabled = type === "staffOnly"; input.checked = false;});
+    draft.participantIds = [];
+    if (type !== "staffOnly") {status.textContent = ""; return;}
+    draft.staffId = ""; select.value = "";
+    status.textContent = "本人の担当職員情報を確認しています…";
+    try {
+      const identity = await window.SeedStudioFirestore.resolvePostingSelf();
+      if (state.draft !== draft || !isStaffOnly(draft) || state.authState.user?.uid !== identity.uid) return;
+      draft.staffId = identity.staffId; draft.createdByUid = identity.uid;
+      select.value = identity.staffId;
+      status.textContent = "職員本人の活動として登録します。参加利用者は0名です。";
+    } catch (error) {status.textContent = "本人の職員対応を確認できません。登録を停止しています。管理者へ確認してください。";}
+  }
+
   function resetDraft() {
+    if ($("#activityTypeSelect")) $("#activityTypeSelect").value = "normal";
+    if ($("#staffSelect")) $("#staffSelect").disabled = false;
+    if ($("#staffIdentityStatus")) $("#staffIdentityStatus").textContent = "";
+    $$("#participantList input").forEach(input => {input.disabled = false;});
     state.mapPoints = [];
 
     const activeStaff =
@@ -1792,6 +1887,11 @@
         {}
     };
 
+    if (MULTI_FLYER_UI_ENABLED) {
+      state.draft.flyerIds = [];
+      state.draft.flyerId = "";
+    }
+
     if ($("#postingDate")) {
       $("#postingDate").value =
         state.draft.postingDate;
@@ -1812,6 +1912,7 @@
         "";
     }
 
+    renderRegisterFlyerChoices();
     renderParticipantList();
     clearDraftMapGraphics();
   }
@@ -1819,6 +1920,59 @@
   // ============================================================
   // Navigation
   // ============================================================
+
+  // P06: lightweight flyer management, no new state machine.
+  function renderFlyerManager() {
+    const list=$('#postingFlyerManagerList');
+    if (!list) return;
+    list.replaceChildren();
+    const add=$('#postingFlyerManagerAdd');
+    if(add) add.disabled=flyerManagerBusy || !state.authState.authorized;
+    if (!state.authState.authorized) {
+      list.textContent='職員としてログインしてください。';return;
+    }
+    for (const flyer of master.flyers) {
+      const item=document.createElement('div');
+      item.className='card';
+      item.style.marginBottom='10px';
+      const name=document.createElement('strong');name.textContent=flyer.name;
+      const status=document.createElement('span');
+      status.textContent=flyer.active?' 使用中':' アーカイブ済み';
+      const rename=document.createElement('button');rename.type='button';
+      rename.className='button button--secondary';rename.textContent='名前変更';
+      rename.disabled=flyerManagerBusy;
+      rename.addEventListener('click',async()=>{
+        const next=window.prompt('チラシ名を入力',flyer.name);
+        if(next===null || next.trim()===flyer.name)return;
+        await handleFlyerManagerWrite(()=>window.SeedStudioFirestore.updatePostingFlyer(flyer.id,{name:next}));
+      });
+      const archive=document.createElement('button');archive.type='button';
+      archive.className='button button--secondary';archive.textContent='アーカイブ';
+      archive.disabled=flyerManagerBusy || !flyer.active;
+      archive.addEventListener('click',async()=>{
+        if(!window.confirm('このチラシを新しい配布の候補から外しますか？過去の履歴は残ります。'))return;
+        await handleFlyerManagerWrite(()=>window.SeedStudioFirestore.updatePostingFlyer(flyer.id,{active:false}));
+      });
+      item.append(name,status,rename,archive);list.append(item);
+    }
+  }
+  let flyerManagerBusy=false;
+  async function handleFlyerManagerWrite(action) {
+    if(flyerManagerBusy)return;
+    flyerManagerBusy=true;
+    let committed=false;
+    const buttons=[...document.querySelectorAll('[data-view="flyer-manager"] button')];
+    buttons.forEach(button=>button.disabled=true);
+    try {
+      await action();
+      committed=true;
+      await masterRepository.reload();
+      renderFlyerManager();
+    } catch(error) {
+      console.error('Flyer management failed',error);
+      window.alert(committed ? '保存は完了しましたが一覧を更新できませんでした。再読込してください。' : '保存を確認できませんでした。一覧を再読込し、追加済みか確認してください。');
+    } finally {flyerManagerBusy=false; buttons.forEach(button=>button.disabled=false); renderFlyerManager();}
+  }
 
   function navigate(view) {
     state.currentView = view;
@@ -1850,6 +2004,9 @@
 
       "participant-manager":
         "ポスティング参加者",
+
+      "flyer-manager":
+        "チラシ管理",
 
       "register-map":
         "配布実績を登録",
@@ -1901,6 +2058,10 @@
       "participant-manager"
     ) {
       renderParticipantUI();
+    }
+
+    if (view === "flyer-manager") {
+      renderFlyerManager();
     }
 
     if (view === "register-map") {
@@ -1988,6 +2149,9 @@
 
       "participant-manager":
         "register-basic",
+
+      "flyer-manager":
+        "home",
 
       "register-map":
         "register-basic",
@@ -2097,6 +2261,7 @@
       }
     }
 
+    renderRegisterFlyerChoices();
     renderParticipantUI();
   }
 
@@ -2206,12 +2371,14 @@
         $("#staffSelect").value;
     }
 
-    if ($("#flyerSelect")) {
-      state.draft.flyerId =
-        $("#flyerSelect").value;
+    if (MULTI_FLYER_UI_ENABLED) {
+      state.draft.flyerIds = registerFlyerUi?.getSelected() || [];
+      state.draft.flyerId = state.draft.flyerIds[0] || "";
+    } else if ($("#flyerSelect")) {
+      state.draft.flyerId = $("#flyerSelect").value;
     }
 
-    state.draft.participantIds =
+    state.draft.participantIds = isStaffOnly(state.draft) ? [] :
       $$(
         "#participantList input:checked"
       ).map(
@@ -2223,7 +2390,7 @@
   function validateStep1() {
     syncStep1();
 
-    const participantOk =
+    const participantOk = isStaffOnly(state.draft) ||
       state.draft.participantIds
         .length > 0;
 
@@ -2236,7 +2403,7 @@
     if (
       !state.masterReady ||
       !state.draft.staffId ||
-      !state.draft.flyerId
+      (MULTI_FLYER_UI_ENABLED ? !state.draft.flyerIds?.length : !state.draft.flyerId)
     ) {
       alert(
         "担当職員またはチラシのマスターを読み込めません。画面を再読み込みしてください。"
@@ -2813,6 +2980,8 @@
   // ============================================================
 
   function renderResultStep() {
+    $("#staffStepsField")?.classList.toggle("is-hidden", !isStaffOnly(state.draft));
+    if ($("#staffStepsInput")) $("#staffStepsInput").value = state.draft.staffSteps ?? "";
     const participantSteps =
       $("#participantSteps");
 
@@ -2889,6 +3058,9 @@
   }
 
   function renderConfirm() {
+    if (isStaffOnly(state.draft)) {
+      try {state.draft.staffSteps = staffStepsValue("#staffStepsInput");} catch (_) {}
+    }
     if ($("#quantityInput")) {
       state.draft.quantity =
         Number(
@@ -2897,7 +3069,7 @@
         );
     }
 
-    const steps =
+    const steps = isStaffOnly(state.draft) ? `職員のみ（利用者0名）・職員歩数 ${state.draft.staffSteps === null ? "未測定" : formatNumber(state.draft.staffSteps) + "歩"}` :
       state.draft.participantIds
         .map(
           (id) =>
@@ -2962,11 +3134,7 @@
           <div class="confirm-row">
             <span>チラシ</span>
             <b>
-              ${escapeHtml(
-                names.flyer(
-                  state.draft.flyerId
-                )
-              )}
+              ${flyerNamesHtml(state.draft)}
             </b>
           </div>
 
@@ -3142,7 +3310,30 @@
       return;
     }
 
+    if (MULTI_FLYER_UI_ENABLED && !state.draft.flyerIds?.length) {
+      alert("配布したチラシを1種類以上選択してください。");
+      saveButton.disabled = false;
+      saveButton.textContent = "この内容で登録する";
+      return;
+    }
+
+    const flyerSelection = MULTI_FLYER_UI_ENABLED
+      ? flyerUiFactory().getSaveFields(state.draft.flyerIds)
+      : {flyerId:state.draft.flyerId};
+
+    let activityFields = {};
+    if (isStaffOnly(state.draft)) {
+      try {
+        const identity = await window.SeedStudioFirestore.resolvePostingSelf();
+        if (identity.uid !== state.draft.createdByUid || identity.staffId !== state.draft.staffId) throw new Error("POSTING_IDENTITY_MISMATCH");
+        activityFields = {activityType:"staffOnly", staffSteps:staffStepsValue("#staffStepsInput"), createdByUid:identity.uid};
+      } catch (error) {
+        alert("職員本人の対応または職員歩数を確認してください。未測定は空欄、歩数は0以上の整数です。");
+        saveButton.disabled = false; saveButton.textContent = "この内容で登録する"; return;
+      }
+    }
     const record = {
+      ...activityFields,
       id:
         "P-" +
         Date.now(),
@@ -3153,8 +3344,7 @@
       staffId:
         state.draft.staffId,
 
-      flyerId:
-        state.draft.flyerId,
+      ...flyerSelection,
 
       quantity:
         state.draft.quantity,
@@ -3237,7 +3427,7 @@
       $("#successQuantity").textContent =
         `${formatNumber(
           record.quantity
-        )}部`;
+        )}部（計${formatNumber(window.SeedStudioPostingRecordModel.getTotalFlyerQuantity(record))}枚）`;
     }
 
     const savedAt =
@@ -3266,7 +3456,7 @@
         `
           <div class="confirm-row">
             <span>保存状態</span>
-            <b>✓ 保存済み</b>
+            <b>${record.storageMode === "firestore" ? "✓ 共有保存済み" : record.storageMode === "review" ? "要確認（共有保存を確認できません）" : "未同期（この端末に一時保存）"}</b>
           </div>
 
           <div class="confirm-row">
@@ -3304,11 +3494,7 @@
           <div class="confirm-row">
             <span>チラシ</span>
             <b>
-              ${escapeHtml(
-                names.flyer(
-                  record.flyerId
-                )
-              )}
+              ${flyerNamesHtml(record)}
             </b>
           </div>
 
@@ -3356,7 +3542,18 @@
   // History
   // ============================================================
 
+  function renderFlyerStats() {
+    const target = $("#postingFlyerStats");
+    if (!target) return;
+    try {
+      const stats = window.SeedStudioPostingRecordModel.aggregateFlyerStats(dataRepository.loadActive());
+      target.innerHTML = `<p>活動 ${formatNumber(stats.activityCount)}回 ／ 配布先共通 ${formatNumber(stats.activityQuantity)}部 ／ チラシ総枚数 ${formatNumber(stats.totalFlyerQuantity)}枚</p>` +
+        Object.entries(stats.byFlyer).map(([id, count]) => `<div>${escapeHtml(names.flyer(id))}：${formatNumber(count)}枚</div>`).join("");
+    } catch (error) { target.textContent = "集計できない実績があります。履歴を確認してください。"; }
+  }
+
   function renderHistory() {
+    renderFlyerStats();
     const records =
       dataRepository
         .loadActive()
@@ -3424,11 +3621,7 @@
 
                     <br>
 
-                    ${escapeHtml(
-                      names.flyer(
-                        record.flyerId
-                      )
-                    )}
+                    ${flyerNamesHtml(record)}
                   </small>
                 </span>
 
@@ -3596,9 +3789,7 @@
     ) {
       $("#historyDetailFlyer")
         .textContent =
-          names.flyer(
-            record.flyerId
-          );
+          flyerNamesText(record);
     }
 
     if (
@@ -3662,16 +3853,20 @@
           );
     }
 
+    if (isStaffOnly(record) && $("#historyDetailParticipants")) {
+      $("#historyDetailParticipants").textContent = `職員のみ活動（利用者0名）・職員歩数 ${record.staffSteps === null ? "未測定" : formatNumber(record.staffSteps) + "歩"}`;
+    }
+    const mayEdit = state.authState.authorized && (!isStaffOnly(record) ||
+      state.authState.staff?.role === "admin" || record.createdByUid === state.authState.user?.uid);
     const editButton =
       $("#historyDetailEditButton");
 
     if (editButton) {
-      editButton.disabled =
-        !state.authState.authorized;
+      editButton.disabled = !mayEdit;
 
       editButton.classList.toggle(
         "is-hidden",
-        !state.authState.authorized
+        !mayEdit
       );
     }
 
@@ -3704,12 +3899,14 @@
     key
   ) {
     const labels = {
+      activityType:"活動区分", staffSteps:"職員歩数",
       postingDate:
         "配布日",
 
       staffId:
         "担当職員",
 
+      flyerIds: "チラシ一覧",
       flyerId:
         "チラシ",
 
@@ -3731,12 +3928,15 @@
     key,
     value
   ) {
+    if (key === "staffSteps") return value === null ? "未測定" : value === undefined ? "—" : `${formatNumber(value)}歩`;
+    if (key === "activityType") return value === "staffOnly" ? "職員のみ活動" : "通常活動";
     if (key === "staffId") {
       return names.staff(
         value
       );
     }
 
+    if (key === "flyerIds") return (value || []).map(names.flyer).join("・");
     if (key === "flyerId") {
       return names.flyer(
         value
@@ -3798,9 +3998,11 @@
       {};
 
     const keys = [
+      "activityType", "staffSteps",
       "postingDate",
       "staffId",
       "flyerId",
+      "flyerIds",
       "quantity",
       "participants",
       "area"
@@ -4470,6 +4672,8 @@
         .SeedStudioPostingRecordModel;
 
     state.editDraft = {
+      activityType:record.activityType,
+      staffSteps:record.staffSteps,
       postingId:
         record.id,
 
@@ -4481,6 +4685,8 @@
         1,
 
       original: {
+        ...(Object.hasOwn(record,"activityType") ? {activityType:record.activityType} : {}),
+        ...(Object.hasOwn(record,"staffSteps") ? {staffSteps:record.staffSteps} : {}),
         postingDate:
           record.postingDate,
 
@@ -4589,6 +4795,13 @@
       reason:
         ""
     };
+
+    if (MULTI_FLYER_UI_ENABLED) {
+      const selected = flyerUiFactory().getEditDraft(record);
+      state.editDraft.flyerIds = selected.flyerIds;
+      state.editDraft.originalFlyerIds = selected.originalFlyerIds;
+      state.editDraft.originalHasFlyerIds = selected.originalHasFlyerIds;
+    }
 
     state.editMapPoints =
       state.editDraft
@@ -4794,6 +5007,11 @@
 
 
   function renderHistoryEdit() {
+    const staffOnly = isStaffOnly(state.editDraft);
+    $("#historyStaffStepsField")?.classList.toggle("is-hidden", !staffOnly);
+    if ($("#historyStaffSteps")) $("#historyStaffSteps").value = state.editDraft?.staffSteps ?? "";
+    if ($("#historyEditActivityType")) $("#historyEditActivityType").textContent = staffOnly ? "職員のみ活動（利用者0名）" : "通常活動";
+    if ($("#historyEditStaff")) $("#historyEditStaff").disabled = staffOnly;
     const record =
       selectedHistoryRecord();
 
@@ -4834,17 +5052,11 @@
           );
     }
 
-    if (
-      $("#historyEditFlyer")
-    ) {
-      $("#historyEditFlyer")
-        .innerHTML =
-          historyEditSelectOptions(
-            master.flyers,
-            state.editDraft
-              .flyerId,
-            names.flyer
-          );
+    if (MULTI_FLYER_UI_ENABLED) {
+      renderEditFlyerChoices();
+    } else if ($("#historyEditFlyer")) {
+      $("#historyEditFlyer").innerHTML =
+        historyEditSelectOptions(master.flyers, state.editDraft.flyerId, names.flyer);
     }
 
     if (
@@ -4897,10 +5109,12 @@
         ?.value ||
       "";
 
-    state.editDraft.flyerId =
-      $("#historyEditFlyer")
-        ?.value ||
-      "";
+    if (MULTI_FLYER_UI_ENABLED) {
+      state.editDraft.flyerIds = editFlyerUi?.getSelected() || [];
+      state.editDraft.flyerId = state.editDraft.flyerIds[0] || "";
+    } else {
+      state.editDraft.flyerId = $("#historyEditFlyer")?.value || "";
+    }
 
     state.editDraft.quantity =
       Number(
@@ -5189,6 +5403,7 @@
       }
     };
 
+    if (isStaffOnly(draft)) next.staffSteps = staffStepsValue("#historyStaffSteps");
     const changes = {};
 
     Object.keys(next)
@@ -5209,6 +5424,11 @@
           }
         }
       );
+
+    if (MULTI_FLYER_UI_ENABLED) {
+      delete changes.flyerId;
+      Object.assign(changes, flyerUiFactory().getFlyerChanges(draft));
+    }
 
     return changes;
   }
@@ -5242,7 +5462,7 @@
     if (
       !draft.postingDate ||
       !draft.staffId ||
-      !draft.flyerId ||
+      (MULTI_FLYER_UI_ENABLED ? !draft.flyerIds?.length : !draft.flyerId) ||
       draft.quantity <= 0
     ) {
       alert(
@@ -5253,7 +5473,7 @@
     }
 
     if (
-      !draft.participantIds
+      !isStaffOnly(draft) && !draft.participantIds
         .length
     ) {
       alert(
@@ -5295,8 +5515,9 @@
       return;
     }
 
-    const changes =
-      historyEditChanges();
+    let changes;
+    try { changes = historyEditChanges(); }
+    catch (_) {alert("職員歩数は空欄または0以上の整数で入力してください。");return;}
 
     if (
       !Object.keys(
@@ -5565,11 +5786,7 @@
                 </b>
 
                 <small>
-                  ${escapeHtml(
-                    names.flyer(
-                      record.flyerId
-                    )
-                  )}
+                  ${flyerNamesHtml(record)}
                 </small>
               </article>
             `
@@ -7142,6 +7359,13 @@
       }
     );
 
+    $('#postingFlyerManagerAdd')?.addEventListener('click',async()=>{
+      if (!state.authState.authorized)return;
+      const name=window.prompt('新しいチラシ名を入力');
+      if(name===null)return;
+      await handleFlyerManagerWrite(()=>window.SeedStudioFirestore.createPostingFlyer(name));
+    });
+
     $("#backButton")
       ?.addEventListener(
         "click",
@@ -7645,6 +7869,8 @@
     );
   }
 
+  document.getElementById("activityTypeSelect")?.addEventListener("change", selectActivityType);
+  document.getElementById("staffStepsInput")?.addEventListener("input", renderConfirm);
   document.addEventListener(
     "DOMContentLoaded",
     () => {
