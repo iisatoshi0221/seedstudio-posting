@@ -1125,7 +1125,14 @@ async function postingRegistrationAccess() {
 }
 
 async function assertPostingRegistration(record, reader = getDoc) {
-  const {user, staff} = await getPostingActor();
+  const user = auth.currentUser;
+  if (!user) throw new Error("POSTING_IDENTITY_REQUIRED");
+  // The actor profile is read through the same transaction reader as the target.
+  const actorSnap = await reader(doc(db, "staff", user.uid));
+  const staff = actorSnap.exists() ? actorSnap.data() : null;
+  if (!staff || staff.active !== true || !["admin", "support"].includes(staff.role)) {
+    throw new Error("POSTING_PERMISSION_REQUIRED");
+  }
   if (record.registrationMode === "delegated") {
     if (staff.postingDelegation?.staffOnlyCreate !== true ||
         typeof record.staffId !== "string" ||
