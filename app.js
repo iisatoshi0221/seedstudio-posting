@@ -1821,7 +1821,8 @@
     $$("#participantList input").forEach(input => {input.disabled = type === "staffOnly"; input.checked = false;});
     draft.participantIds = [];
     if (type !== "staffOnly") {status.textContent = ""; return;}
-    draft.staffId = ""; select.value = "";
+    // Keep the user's current staff choice while checking delegated access.
+    const previouslySelectedStaffId = select.value || draft.staffId || "";
     delete draft.registrationMode;
     delete draft.createdByUid;
     status.textContent = "職員登録権限を確認しています…";
@@ -1832,7 +1833,10 @@
       if (access.delegated) {
         draft.registrationMode = "delegated";
         select.disabled = false;
-        select.value = "";
+        const validPreviousSelection = master.staff.some(item =>
+          item.active && item.id === previouslySelectedStaffId);
+        draft.staffId = validPreviousSelection ? previouslySelectedStaffId : "";
+        select.value = draft.staffId;
         status.textContent = "会社共通アカウントの代理登録です。活動した職員を選択してください。利用者は0名です。";
       } else {
         draft.staffId = access.staffId;
