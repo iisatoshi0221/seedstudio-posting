@@ -10,6 +10,7 @@ import {
   getDocs,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   runTransaction,
   serverTimestamp
@@ -528,7 +529,7 @@ function assertPostingExpectedVersion(
 }
 
 
-async function getPostingActor() {
+async function getPostingActor(reader = getDoc) {
   const user =
     auth.currentUser;
 
@@ -540,7 +541,8 @@ async function getPostingActor() {
 
   const staff =
     await getStaffProfile(
-      user
+      user,
+      reader
     );
 
   if (
@@ -570,7 +572,8 @@ async function getPostingActor() {
 // ============================================================
 
 async function getStaffProfile(
-  user
+  user,
+  reader = getDoc
 ) {
   if (!user) {
     return null;
@@ -584,7 +587,7 @@ async function getStaffProfile(
     );
 
   const snapshot =
-    await getDoc(
+    await reader(
       reference
     );
 
@@ -1116,15 +1119,16 @@ async function postingSelfIdentity(expectedStaffId = null, reader = getDoc) {
 }
 
 async function postingRegistrationAccess() {
-  const {user, staff} = await getPostingActor();
+  const {user, staff} = await getPostingActor(getDocFromServer);
+  if (auth.currentUser?.uid !== user.uid) throw new Error("POSTING_IDENTITY_MISMATCH");
   if (staff.postingDelegation?.staffOnlyCreate === true) {
     return {uid:user.uid, delegated:true};
   }
-  const identity = await postingSelfIdentity();
+  const identity = await postingSelfIdentity(null, getDocFromServer);
   return {...identity, delegated:false};
 }
 
-async function assertPostingRegistration(record, reader = getDoc) {
+async function assertPostingRegistration(record, reader = getDocFromServer) {
   const user = auth.currentUser;
   if (!user) throw new Error("POSTING_IDENTITY_REQUIRED");
   // The actor profile is read through the same transaction reader as the target.
@@ -1144,6 +1148,7 @@ async function assertPostingRegistration(record, reader = getDoc) {
     if (!target || target.active !== true || target.staffId !== record.staffId) {
       throw new Error("POSTING_DELEGATION_TARGET_INACTIVE");
     }
+    if (auth.currentUser?.uid !== user.uid) throw new Error("POSTING_IDENTITY_MISMATCH");
     return {uid:user.uid, staffId:record.staffId, delegated:true};
   }
   if (Object.hasOwn(record, "registrationMode")) {

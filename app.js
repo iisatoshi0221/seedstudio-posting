@@ -1810,7 +1810,9 @@
     if (!input || input.validity.badInput) throw new Error("INVALID_STAFF_STEPS");
     return window.SeedStudioPostingRecordModel.parseStaffSteps(input.value);
   }
+  let registrationAccessCheck = 0;
   async function selectActivityType() {
+    const check = ++registrationAccessCheck;
     const draft = state.draft;
     const type = $("#activityTypeSelect")?.value || "normal";
     draft.activityType = type;
@@ -1824,12 +1826,12 @@
     // Keep the user's current staff choice while checking delegated access.
     const previouslySelectedStaffId = select.value || draft.staffId || "";
     delete draft.registrationMode;
-    delete draft.createdByUid;
+    draft.createdByUid = state.authState.user?.uid || "";
     status.textContent = "職員登録権限を確認しています…";
     try {
       const access = await window.SeedStudioFirestore.getPostingRegistrationAccess();
-      if (state.draft !== draft || !isStaffOnly(draft) || state.authState.user?.uid !== access.uid) return;
-      draft.createdByUid = access.uid;
+      if (check !== registrationAccessCheck || state.draft !== draft || !isStaffOnly(draft) ||
+          draft.createdByUid !== access.uid || state.authState.user?.uid !== access.uid) return;
       if (access.delegated) {
         draft.registrationMode = "delegated";
         select.disabled = false;
@@ -1844,6 +1846,7 @@
         status.textContent = "職員本人の活動として登録します。参加利用者は0名です。";
       }
     } catch (error) {
+      if (check !== registrationAccessCheck || state.draft !== draft || !isStaffOnly(draft)) return;
       status.textContent = "職員登録の権限を確認できません。登録を停止しています。管理者へ確認してください。";
     }
   }
@@ -3360,21 +3363,46 @@
 
     let activityFields = {};
     if (isStaffOnly(state.draft)) {
+      let staffSteps;
       try {
-        if (!state.draft.createdByUid || !state.draft.staffId ||
-            state.draft.createdByUid !== state.authState.user?.uid) throw new Error("POSTING_IDENTITY_MISMATCH");
-        const candidate = {staffId:state.draft.staffId};
-        if (state.draft.registrationMode === "delegated") candidate.registrationMode = "delegated";
+        staffSteps = staffStepsValue("#staffStepsInput");
+      } catch (error) {
+        alert("職員歩数は空欄（未測定）または0以上の整数で入力してください。入力内容は保持しています。");
+        saveButton.disabled = false; saveButton.textContent = "この内容で登録する"; return;
+      }
+      try {
+        const draft = state.draft;
+        const actorUid = draft.createdByUid;
+        const staffId = draft.staffId;
+        const unchanged = () => state.draft === draft && isStaffOnly(draft) &&
+          draft.staffId === staffId && draft.createdByUid === actorUid &&
+          state.authState.user?.uid === actorUid;
+        if (!actorUid || !staffId || !unchanged()) throw new Error("POSTING_IDENTITY_MISMATCH");
+        // Re-read permission; do not trust the mode captured on step 1.
+        const access = await window.SeedStudioFirestore.getPostingRegistrationAccess();
+        if (!unchanged() || access.uid !== actorUid ||
+            (!access.delegated && access.staffId !== staffId)) throw new Error("POSTING_IDENTITY_MISMATCH");
+        const candidate = {staffId, ...(access.delegated ? {registrationMode:"delegated"} : {})};
         const identity = await window.SeedStudioFirestore.assertPostingRegistration(candidate);
-        if (identity.uid !== state.draft.createdByUid ||
-            identity.staffId !== state.draft.staffId ||
-            identity.delegated !== (state.draft.registrationMode === "delegated")) {
+        if (!unchanged() || identity.uid !== actorUid ||
+            identity.staffId !== staffId || identity.delegated !== access.delegated) {
           throw new Error("POSTING_IDENTITY_MISMATCH");
         }
-        activityFields = {activityType:"staffOnly", staffSteps:staffStepsValue("#staffStepsInput"), createdByUid:identity.uid,
+        activityFields = {activityType:"staffOnly", staffSteps, createdByUid:identity.uid,
           ...(identity.delegated ? {registrationMode:"delegated"} : {})};
       } catch (error) {
-        alert("職員本人の対応または職員歩数を確認してください。未測定は空欄、歩数は0以上の整数です。");
+        const code = error?.code || error?.message;
+        const message = {
+          POSTING_IDENTITY_REQUIRED:"Googleログイン状態を確認してください。",
+          "Authentication required.":"Googleログイン状態を確認してください。",
+          POSTING_PERMISSION_REQUIRED:"このアカウントの登録権限を確認してください。",
+          "Posting permission required.":"このアカウントの登録権限を確認してください。",
+          POSTING_DELEGATION_DENIED:"代理登録の権限を確認できません。管理者へ確認してください。",
+          POSTING_DELEGATION_TARGET_INACTIVE:"選択した担当職員が無効、または見つかりません。担当職員を確認してください。",
+          POSTING_IDENTITY_MISMATCH:"ログイン中の本人・担当職員・登録権限の状態を確認してください。",
+          POSTING_REGISTRATION_MODE_INVALID:"活動区分と登録権限を確認してください。"
+        }[code] || "登録権限を再確認できませんでした。通信状態とGoogleログイン状態を確認してください。";
+        alert(message + "入力内容は保持しています。");
         saveButton.disabled = false; saveButton.textContent = "この内容で登録する"; return;
       }
     }
